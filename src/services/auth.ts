@@ -41,7 +41,15 @@ export async function ensureBootstrapAdmin(): Promise<void> {
 
 /** შესვლა username + password-ით. აბრუნებს მომხმარებელს ან აგდებს შეცდომას. */
 export async function login(username: string, password: string): Promise<User> {
-  const users = await getCollectionOnce<User>('users');
+  let users: User[];
+  try {
+    users = await getCollectionOnce<User>('users');
+  } catch (e) {
+    if ((e as { code?: string })?.code === 'permission-denied') {
+      throw new Error('Firestore-ის წესები არ არის გამოქვეყნებული (Console → Rules → Publish)');
+    }
+    throw new Error('Firebase-თან კავშირი ვერ დამყარდა');
+  }
   const uname = username.trim().toLowerCase();
   const user = users.find((u) => (u.username || '').toLowerCase() === uname);
   if (!user) throw new Error('მომხმარებელი ვერ მოიძებნა');

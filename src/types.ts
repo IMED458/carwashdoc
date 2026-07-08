@@ -23,10 +23,12 @@ export interface Category {
   createdAt?: string;
 }
 
+export type SupplierType = 'company' | 'entrepreneur' | 'individual';
+
 export interface Supplier {
   id: string;
   name: string;
-  type: 'company' | 'individual';
+  type: SupplierType;
   taxId: string;
   phone?: string;
   createdAt?: string;
@@ -35,8 +37,8 @@ export interface Supplier {
 export interface Expense {
   id: string;
   title: string;
-  categoryId: string;
-  supplierId: string;
+  category: string; // თავისუფალი ტექსტი
+  supplier: string; // მიმწოდებელი / მიმღები (ხელფასის შემთხვევაში — პირის სახელი)
   amount: number;
   date: string; // YYYY-MM-DD
   status: ExpenseStatus;

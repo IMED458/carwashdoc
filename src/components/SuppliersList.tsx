@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Building2, User } from 'lucide-react';
-import { Supplier } from '../types';
+import { Supplier, SupplierType } from '../types';
 import { SUPPLIER_TYPE_LABELS } from '../data/defaults';
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 
 export interface SupplierForm {
   name: string;
-  type: 'company' | 'individual';
+  type: SupplierType;
   taxId: string;
   phone: string;
 }
@@ -58,11 +58,12 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onDelete }: P
             <label className="block text-xs font-bold text-slate-500 mb-1">ტიპი</label>
             <select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as 'company' | 'individual' })}
+              onChange={(e) => setForm({ ...form, type: e.target.value as SupplierType })}
               className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
             >
-              <option value="company">იურიდიული</option>
-              <option value="individual">ფიზიკური</option>
+              <option value="company">იურიდიული პირი</option>
+              <option value="entrepreneur">ინდ. მეწარმე</option>
+              <option value="individual">ფიზიკური პირი</option>
             </select>
           </div>
           <div>

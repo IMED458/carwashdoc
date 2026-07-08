@@ -1,7 +1,7 @@
 /**
  * კონფიგურაცია და ქართული ლეიბლები.
  */
-import { UserRole, ExpenseStatus, PaymentMethod } from '../types';
+import { UserRole, ExpenseStatus, PaymentMethod, SupplierType } from '../types';
 
 export const DEFAULT_BUDGET = 50000;
 
@@ -31,8 +31,9 @@ export const STATUS_STYLES: Record<ExpenseStatus, string> = {
   rejected: 'bg-red-50 text-red-600',
 };
 
-export const SUPPLIER_TYPE_LABELS: Record<'company' | 'individual', string> = {
+export const SUPPLIER_TYPE_LABELS: Record<SupplierType, string> = {
   company: 'იურიდიული პირი',
+  entrepreneur: 'ინდ. მეწარმე',
   individual: 'ფიზიკური პირი',
 };
 

@@ -26,8 +26,8 @@ export default function Dashboard({ expenses, categories, payments, totalBudget,
 
   const recent = [...expenses].sort((a, b) => (b.date > a.date ? 1 : -1)).slice(0, 6);
 
-  const catSpent = (catId: string) =>
-    expenses.filter((e) => e.categoryId === catId).reduce((s, e) => s + e.amount, 0);
+  const catSpent = (catName: string) =>
+    expenses.filter((e) => e.category === catName).reduce((s, e) => s + e.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -63,7 +63,7 @@ export default function Dashboard({ expenses, categories, payments, totalBudget,
           ) : (
             <div className="space-y-4">
               {categories.map((c) => {
-                const spent = catSpent(c.id);
+                const spent = catSpent(c.name);
                 const pct = c.plannedBudget ? Math.min(100, (spent / c.plannedBudget) * 100) : 0;
                 return (
                   <div key={c.id}>

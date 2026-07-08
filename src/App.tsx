@@ -45,7 +45,15 @@ export default function App() {
 
   const fail = (e: unknown) => {
     console.error(e);
-    alert('ოპერაცია ვერ შესრულდა. შეამოწმეთ ინტერნეტი და სცადეთ თავიდან.');
+    const code = (e as { code?: string })?.code;
+    if (code === 'permission-denied') {
+      alert(
+        'Firestore-ის წვდომა აკრძალულია.\n\nგამოაქვეყნეთ წესები Firebase Console-ში:\nFirestore → Rules → allow read, write: if true; → Publish',
+      );
+    } else {
+      const msg = (e as { message?: string })?.message || 'უცნობი შეცდომა';
+      alert('ოპერაცია ვერ შესრულდა: ' + msg);
+    }
   };
 
   // ხარჯები

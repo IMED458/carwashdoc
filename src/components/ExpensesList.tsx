@@ -15,8 +15,8 @@ interface Props {
 
 export interface ExpenseForm {
   title: string;
-  categoryId: string;
-  supplierId: string;
+  category: string;
+  supplier: string;
   amount: number;
   date: string;
   status: ExpenseStatus;
@@ -28,8 +28,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const emptyForm = (): ExpenseForm => ({
   title: '',
-  categoryId: '',
-  supplierId: '',
+  category: '',
+  supplier: '',
   amount: 0,
   date: today(),
   status: 'draft',
@@ -51,13 +51,15 @@ export default function ExpensesList({
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ExpenseForm>(emptyForm());
 
-  const catName = (id: string) => categories.find((c) => c.id === id)?.name || '—';
-  const supName = (id: string) => suppliers.find((s) => s.id === id)?.name || '—';
-
   const filtered = useMemo(() => {
     return expenses
       .filter((e) => (statusFilter === 'all' ? true : e.status === statusFilter))
-      .filter((e) => e.title.toLowerCase().includes(search.toLowerCase()))
+      .filter(
+        (e) =>
+          e.title.toLowerCase().includes(search.toLowerCase()) ||
+          (e.category || '').toLowerCase().includes(search.toLowerCase()) ||
+          (e.supplier || '').toLowerCase().includes(search.toLowerCase()),
+      )
       .sort((a, b) => (b.date > a.date ? 1 : -1));
   }, [expenses, search, statusFilter]);
 
@@ -71,8 +73,8 @@ export default function ExpensesList({
     setEditId(e.id);
     setForm({
       title: e.title,
-      categoryId: e.categoryId,
-      supplierId: e.supplierId,
+      category: e.category || '',
+      supplier: e.supplier || '',
       amount: e.amount,
       date: e.date,
       status: e.status,
@@ -97,7 +99,9 @@ export default function ExpensesList({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-black text-slate-800">ხარჯები</h2>
-          <p className="text-xs text-slate-500 mt-1">გრანტის ხარჯების რეესტრი.</p>
+          <p className="text-xs text-slate-500 mt-1">
+            ხარჯების, ხელფასებისა და ფიზ. პირებზე გადახდების ერთიანი რეესტრი.
+          </p>
         </div>
         {canEdit && (
           <button
@@ -116,7 +120,7 @@ export default function ExpensesList({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ძებნა დასახელებით..."
+            placeholder="ძებნა..."
             className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-sm"
           />
         </div>
@@ -145,7 +149,7 @@ export default function ExpensesList({
                 <tr className="text-left text-[11px] text-slate-400 font-bold uppercase border-b border-slate-100">
                   <th className="px-4 py-3">დასახელება</th>
                   <th className="px-4 py-3 hidden md:table-cell">კატეგორია</th>
-                  <th className="px-4 py-3 hidden lg:table-cell">მიმწოდებელი</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">მიმღები</th>
                   <th className="px-4 py-3">თანხა</th>
                   <th className="px-4 py-3 hidden sm:table-cell">თარიღი</th>
                   <th className="px-4 py-3">სტატუსი</th>
@@ -159,8 +163,8 @@ export default function ExpensesList({
                       {e.title}
                       {e.note && <span className="block text-[11px] text-slate-400 font-normal">{e.note}</span>}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 hidden md:table-cell">{catName(e.categoryId)}</td>
-                    <td className="px-4 py-3 text-slate-500 hidden lg:table-cell">{supName(e.supplierId)}</td>
+                    <td className="px-4 py-3 text-slate-500 hidden md:table-cell">{e.category || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 hidden lg:table-cell">{e.supplier || '—'}</td>
                     <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap">{gel(e.amount)}</td>
                     <td className="px-4 py-3 text-slate-500 hidden sm:table-cell whitespace-nowrap">{e.date}</td>
                     <td className="px-4 py-3">
@@ -212,7 +216,7 @@ export default function ExpensesList({
                 <input
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="მაგ: ბეტონის შესყიდვა"
+                  placeholder="მაგ: ბეტონის შესყიდვა / ხელფასი — გიორგი"
                   className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
                 />
               </div>
@@ -238,36 +242,37 @@ export default function ExpensesList({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">კატეგორია</label>
-                  <select
-                    value={form.categoryId}
-                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  <input
+                    list="cat-list"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="ჩაწერეთ ან აირჩიეთ"
                     className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
-                  >
-                    <option value="">— აირჩიეთ —</option>
+                  />
+                  <datalist id="cat-list">
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
+                      <option key={c.id} value={c.name} />
                     ))}
-                  </select>
+                    <option value="ხელფასი" />
+                  </datalist>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">მიმწოდებელი</label>
-                  <select
-                    value={form.supplierId}
-                    onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                  <label className="block text-xs font-bold text-slate-500 mb-1">მიმღები / მიმწოდებელი</label>
+                  <input
+                    list="sup-list"
+                    value={form.supplier}
+                    onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                    placeholder="ჩაწერეთ ან აირჩიეთ"
                     className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
-                  >
-                    <option value="">— აირჩიეთ —</option>
+                  />
+                  <datalist id="sup-list">
                     {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
+                      <option key={s.id} value={s.name} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
 
