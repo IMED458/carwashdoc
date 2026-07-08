@@ -8,9 +8,12 @@ export type UserRole = 'admin' | 'accountant' | 'manager' | 'viewer' | 'uploader
 export interface User {
   id: string;
   name: string;
+  username: string;
+  passwordHash?: string;
   email: string;
   role: UserRole;
   isActive: boolean;
+  createdAt?: string;
 }
 
 export interface BudgetSettings {

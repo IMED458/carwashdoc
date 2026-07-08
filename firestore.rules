@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// აპლიკაცია იყენებს Firestore-ზე დაფუძნებულ საკუთარ ავტორიზაციას (Firebase Auth-ის გარეშე),
+// ამიტომ კლიენტს სჭირდება პირდაპირი წვდომა. ეს წესები ჩააგდეთ Firebase Console-ში:
+// Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -3,23 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Receipt, 
-  Users2, 
-  Building2, 
-  CreditCard, 
-  Landmark, 
-  BarChart3, 
-  Settings, 
-  FileCode, 
-  Menu, 
+import React, { useState, useEffect } from 'react';
+import {
+  LayoutDashboard,
+  Receipt,
+  Users2,
+  Building2,
+  CreditCard,
+  Landmark,
+  BarChart3,
+  Settings,
+  FileCode,
+  Menu,
   X,
-  User,
   Shield,
   Clock,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -31,6 +31,7 @@ interface MainLayoutProps {
   currentUserName: string;
   totalBudget: number;
   totalSpent: number;
+  onLogout: () => void;
 }
 
 export default function MainLayout({
@@ -40,13 +41,22 @@ export default function MainLayout({
   currentUserRole,
   currentUserName,
   totalBudget,
-  totalSpent
+  totalSpent,
+  onLogout
 }: MainLayoutProps) {
-  
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Time formatted UTC clock
-  const currentUtcDate = "2026-07-08 20:47:00"; // Based on prompt context timeline
+  // ცოცხალი UTC საათი
+  const [currentUtcDate, setCurrentUtcDate] = useState(() =>
+    new Date().toISOString().slice(0, 19).replace('T', ' '),
+  );
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentUtcDate(new Date().toISOString().slice(0, 19).replace('T', ' '));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const menuItems = [
     { id: 'dashboard', name: 'მთავარი დაფა', icon: LayoutDashboard },
@@ -126,6 +136,18 @@ export default function MainLayout({
               </span>
             </div>
           </div>
+
+          {/* Logout button */}
+          <button
+            onClick={() => {
+              if (confirm('ნამდვილად გსურთ სისტემიდან გამოსვლა?')) onLogout();
+            }}
+            title="გამოსვლა"
+            className="flex items-center gap-1.5 p-2 md:px-3 md:py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl border border-slate-100 hover:border-red-100 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden md:inline font-bold">გამოსვლა</span>
+          </button>
 
         </div>
 
