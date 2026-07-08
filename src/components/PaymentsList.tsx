@@ -1,138 +1,200 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
-import { CreditCard, Search, ArrowRight, CheckCircle, Clock, Hash, ShieldAlert } from 'lucide-react';
-import { Payment, Expense } from '../types';
+import { Plus, Trash2, X } from 'lucide-react';
+import { Payment, PaymentMethod, Expense } from '../types';
+import { PAYMENT_METHOD_LABELS } from '../data/defaults';
 
-interface PaymentsListProps {
+interface Props {
   payments: Payment[];
   expenses: Expense[];
+  canEdit: boolean;
+  onAdd: (data: PaymentForm) => void;
+  onDelete: (id: string) => void;
 }
 
-export default function PaymentsList({ payments, expenses }: PaymentsListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+export interface PaymentForm {
+  expenseId: string;
+  amount: number;
+  date: string;
+  method: PaymentMethod;
+  note: string;
+}
 
-  // Filter payments
-  const filteredPayments = payments.filter(p => {
-    const matchedExpense = expenses.find(e => e.id === p.expenseId);
-    return p.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.bankTxNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           matchedExpense?.title.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+const gel = (n: number) => `${n.toLocaleString()} ₾`;
+const today = () => new Date().toISOString().slice(0, 10);
+const emptyForm = (): PaymentForm => ({ expenseId: '', amount: 0, date: today(), method: 'bank', note: '' });
+
+export default function PaymentsList({ payments, expenses, canEdit, onAdd, onDelete }: Props) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<PaymentForm>(emptyForm());
+
+  const expTitle = (id: string) => expenses.find((e) => e.id === id)?.title || '—';
+
+  const openAdd = () => {
+    setForm(emptyForm());
+    setModalOpen(true);
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.amount) {
+      alert('შეავსეთ თანხა!');
+      return;
+    }
+    onAdd(form);
+    setModalOpen(false);
+  };
+
+  const sorted = [...payments].sort((a, b) => (b.date > a.date ? 1 : -1));
 
   return (
-    <div className="space-y-6" id="payments-section-root">
-      
-      {/* Top Header */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-800 tracking-tight font-sans">გადახდებისა და ტრანზაქციების ჟურნალი</h2>
-        <p className="text-xs text-slate-500 mt-1">
-          პროექტის ბიუჯეტიდან განხორციელებული საბანკო გადარიცხვებისა და ნაღდი ანგარიშსწორების სრული სია.
-        </p>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-black text-slate-800">გადახდები</h2>
+          <p className="text-xs text-slate-500 mt-1">გადახდების ჟურნალი.</p>
+        </div>
+        {canEdit && (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> ახალი გადახდა
+          </button>
+        )}
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">სულ გადახდები</span>
-          <span className="text-xl font-black text-slate-800 block mt-1">{payments.length} ტრანზაქცია</span>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">ჯამურად გადახდილი თანხა</span>
-          <span className="text-xl font-black text-indigo-600 block mt-1">
-            {payments.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount, 0).toLocaleString()} GEL
-          </span>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">სულ საბანკო საკომისიო (Fees)</span>
-          <span className="text-xl font-black text-slate-800 block mt-1">
-            {payments.reduce((s, p) => s + p.fee, 0).toLocaleString()} GEL
-          </span>
-        </div>
-      </div>
-
-      {/* Search Input */}
-      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative">
-        <Search className="absolute left-7 top-7 h-4 w-4 text-slate-400" />
-        <input 
-          type="text" 
-          placeholder="ძებნა მიმღებით, გადარიცხვის მიზნით, TXN კოდით ან ხარჯის დასახელებით..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 bg-slate-50/50 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
-        />
-      </div>
-
-      {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse font-sans">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider">
-                <th className="p-4">მიმღები პირი</th>
-                <th className="p-4">დაკავშირებული ხარჯი</th>
-                <th className="p-4">გადარიცხვის მიზანი / TXN კოდი</th>
-                <th className="p-4 text-right">გადახდილი თანხა</th>
-                <th className="p-4 text-center">მეთოდი</th>
-                <th className="p-4">თარიღი</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredPayments.map(p => {
-                const matchedExpense = expenses.find(e => e.id === p.expenseId);
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4">
-                      <span className="font-bold text-slate-900 block">{p.recipientName}</span>
-                      <span className="text-[10px] text-slate-400 block font-mono">ანგარიში: {p.payerAccount}</span>
-                    </td>
-                    <td className="p-4">
-                      {matchedExpense ? (
-                        <span className="font-semibold text-indigo-700 block max-w-xs truncate">{matchedExpense.title}</span>
-                      ) : (
-                        <span className="text-slate-400 italic">არ არის დაკავშირებული</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-0.5">
-                        <span className="text-slate-600 block max-w-xs truncate">{p.purpose}</span>
-                        {p.bankTxNumber && (
-                          <span className="text-[10px] text-indigo-500 font-mono flex items-center gap-1">
-                            <Hash className="h-3 w-3" />
-                            TXN: {p.bankTxNumber}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-right font-black text-slate-900">
-                      {p.amount.toLocaleString()} GEL
-                      {p.fee > 0 && <span className="text-[9px] text-slate-400 block font-normal">საკომისიო: {p.fee} GEL</span>}
-                    </td>
-                    <td className="p-4 text-center">
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-bold rounded uppercase">
-                        {p.paymentMethod === 'bank' ? 'საბანკო' : p.paymentMethod === 'cash' ? 'ნაღდი' : p.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="p-4 font-mono text-slate-500">
-                      {p.paymentDate}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredPayments.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">გადახდის ჩანაწერები ვერ მოიძებნა.</td>
+        {sorted.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-12">გადახდები ჯერ არ არის.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-slate-400 font-bold uppercase border-b border-slate-100">
+                  <th className="px-4 py-3">ხარჯი</th>
+                  <th className="px-4 py-3">თანხა</th>
+                  <th className="px-4 py-3 hidden sm:table-cell">თარიღი</th>
+                  <th className="px-4 py-3">მეთოდი</th>
+                  {canEdit && <th className="px-4 py-3 text-right">მოქმედება</th>}
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {sorted.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50">
+                    <td className="px-4 py-3 font-semibold text-slate-700">
+                      {expTitle(p.expenseId)}
+                      {p.note && <span className="block text-[11px] text-slate-400 font-normal">{p.note}</span>}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap">{gel(p.amount)}</td>
+                    <td className="px-4 py-3 text-slate-500 hidden sm:table-cell whitespace-nowrap">{p.date}</td>
+                    <td className="px-4 py-3 text-slate-500">{PAYMENT_METHOD_LABELS[p.method]}</td>
+                    {canEdit && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => {
+                            if (confirm('წავშალოთ ეს გადახდა?')) onDelete(p.id);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
+      {/* MODAL */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800">ახალი გადახდა</h3>
+              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={submit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">ხარჯი</label>
+                <select
+                  value={form.expenseId}
+                  onChange={(e) => setForm({ ...form, expenseId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+                >
+                  <option value="">— აირჩიეთ ხარჯი —</option>
+                  {expenses.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">თანხა (₾) *</label>
+                  <input
+                    type="number"
+                    value={form.amount || ''}
+                    onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">თარიღი</label>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">გადახდის მეთოდი</label>
+                <select
+                  value={form.method}
+                  onChange={(e) => setForm({ ...form, method: e.target.value as PaymentMethod })}
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+                >
+                  {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
+                    <option key={m} value={m}>
+                      {PAYMENT_METHOD_LABELS[m]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">შენიშვნა</label>
+                <input
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  გაუქმება
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl"
+                >
+                  დამატება
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

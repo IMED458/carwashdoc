@@ -34,7 +34,6 @@ export async function ensureBootstrapAdmin(): Promise<void> {
     username: 'imedo',
     passwordHash,
     role: 'admin' as UserRole,
-    email: '',
     isActive: true,
     createdAt: new Date().toISOString(),
   });
@@ -76,7 +75,6 @@ export async function createUser(input: {
   username: string;
   password: string;
   role: UserRole;
-  email?: string;
 }): Promise<void> {
   const users = await getCollectionOnce<User>('users');
   const uname = input.username.trim().toLowerCase();
@@ -89,7 +87,6 @@ export async function createUser(input: {
     username: input.username.trim(),
     passwordHash,
     role: input.role,
-    email: input.email?.trim() || '',
     isActive: true,
     createdAt: new Date().toISOString(),
   });

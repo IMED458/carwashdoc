@@ -1,240 +1,81 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import MainLayout from './components/MainLayout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import ExpensesList from './components/ExpensesList';
-import PayrollList from './components/PayrollList';
-import SuppliersList from './components/SuppliersList';
-import PaymentsList from './components/PaymentsList';
-import TranchesList from './components/TranchesList';
-import ReportsPanel from './components/ReportsPanel';
+import ExpensesList, { ExpenseForm } from './components/ExpensesList';
+import SuppliersList, { SupplierForm } from './components/SuppliersList';
+import PaymentsList, { PaymentForm } from './components/PaymentsList';
 import SettingsPanel from './components/SettingsPanel';
-import TechDocsPanel from './components/TechDocsPanel';
 
 import { useAuth } from './context/AuthContext';
 import { useCollection, useDocState } from './hooks/useFirestore';
-import { addItem, updateItem } from './services/firestore';
-import { DEFAULT_TAX_SETTINGS, DEFAULT_BUDGET } from './data/defaults';
-import {
-  Expense,
-  ExpenseStatus,
-  Category,
-  Supplier,
-  Payment,
-  Document,
-  PayrollOrIndividualService,
-  Comment,
-  StatusHistory,
-  Tranche,
-  TaxSettings,
-  Notification,
-  User,
-} from './types';
+import { addItem, updateItem, deleteItem } from './services/firestore';
+import { DEFAULT_BUDGET, canEdit } from './data/defaults';
+import { Expense, Category, Supplier, Payment, User } from './types';
 
 export default function App() {
-  const { currentUser, loading, error, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const { currentUser, loading, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Firestore realtime კოლექციები
   const expenses = useCollection<Expense>('expenses');
   const categories = useCollection<Category>('categories');
   const suppliers = useCollection<Supplier>('suppliers');
   const payments = useCollection<Payment>('payments');
-  const documents = useCollection<Document>('documents');
-  const payrollList = useCollection<PayrollOrIndividualService>('payroll');
-  const comments = useCollection<Comment>('comments');
-  const history = useCollection<StatusHistory>('history');
-  const tranches = useCollection<Tranche>('tranches');
-  const notifications = useCollection<Notification>('notifications');
   const users = useCollection<User>('users');
-  const [taxSettings, saveTaxSettings] = useDocState<TaxSettings>(
-    'settings',
-    'tax',
-    DEFAULT_TAX_SETTINGS,
-  );
-  const [budgetDoc] = useDocState<{ initialBudget: number }>('settings', 'budget', {
+  const [budgetDoc, saveBudget] = useDocState<{ initialBudget: number }>('settings', 'budget', {
     initialBudget: DEFAULT_BUDGET,
   });
 
-  // ავტორიზაციის მდგომარეობა
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-3 font-sans">
         <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
         <span className="text-xs text-slate-400 font-semibold">იტვირთება...</span>
-        {error && <span className="text-xs text-red-500 font-semibold">{error}</span>}
       </div>
     );
   }
 
-  if (!currentUser) {
-    return <Login />;
-  }
+  if (!currentUser) return <Login />;
 
-  const currentUserRole = currentUser.role;
-  const currentUserName = currentUser.name;
-  const currentUserId = currentUser.id;
-
+  const role = currentUser.role;
+  const editable = canEdit(role);
   const totalBudget = budgetDoc.initialBudget || DEFAULT_BUDGET;
-  const totalSpent = payments
-    .filter((p) => p.status === 'approved')
-    .reduce((sum, p) => sum + p.amount, 0);
+  const totalSpent = payments.reduce((s, p) => s + p.amount, 0);
 
   const fail = (e: unknown) => {
     console.error(e);
-    alert('ოპერაცია ვერ შესრულდა. სცადეთ თავიდან.');
+    alert('ოპერაცია ვერ შესრულდა. შეამოწმეთ ინტერნეტი და სცადეთ თავიდან.');
   };
 
-  // ხარჯის დამატება
-  const handleAddExpense = (
-    newExp: Omit<Expense, 'id' | 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>,
-  ) => {
-    const timestamp = new Date().toISOString();
-    addItem('expenses', {
-      ...newExp,
-      createdAt: timestamp,
-      createdBy: currentUserId,
-      updatedAt: timestamp,
-      updatedBy: currentUserId,
-    })
-      .then((newId) =>
-        addItem('history', {
-          expenseId: newId,
-          fromStatus: ExpenseStatus.Draft,
-          toStatus: newExp.status,
-          changedBy: currentUserName,
-          changeDate: timestamp,
-          comment: 'ხარჯი შეიქმნა ახალი ჩანაწერით.',
-        }),
-      )
-      .catch(fail);
-  };
+  // ხარჯები
+  const addExpense = (f: ExpenseForm) =>
+    addItem('expenses', { ...f, createdByName: currentUser.name, createdAt: new Date().toISOString() }).catch(fail);
+  const updateExpense = (id: string, f: ExpenseForm) => updateItem('expenses', id, { ...f }).catch(fail);
+  const deleteExpense = (id: string) => deleteItem('expenses', id).catch(fail);
 
-  // ხარჯის სტატუსის განახლება
-  const handleUpdateExpenseStatus = (
-    expenseId: string,
-    newStatus: ExpenseStatus,
-    commentText?: string,
-  ) => {
-    const timestamp = new Date().toISOString();
-    const exp = expenses.find((e) => e.id === expenseId);
-    if (!exp) return;
+  // მიმწოდებლები
+  const addSupplier = (f: SupplierForm) =>
+    addItem('suppliers', { ...f, createdAt: new Date().toISOString() }).catch(fail);
+  const deleteSupplier = (id: string) => deleteItem('suppliers', id).catch(fail);
 
-    updateItem('expenses', expenseId, {
-      status: newStatus,
-      updatedAt: timestamp,
-      updatedBy: currentUserId,
-    }).catch(fail);
+  // გადახდები
+  const addPayment = (f: PaymentForm) =>
+    addItem('payments', { ...f, createdAt: new Date().toISOString() }).catch(fail);
+  const deletePayment = (id: string) => deleteItem('payments', id).catch(fail);
 
-    addItem('history', {
-      expenseId,
-      fromStatus: exp.status,
-      toStatus: newStatus,
-      changedBy: currentUserName,
-      changeDate: timestamp,
-      comment: commentText || '',
-    }).catch(fail);
-
-    if (commentText) {
-      addItem('comments', {
-        expenseId,
-        userName: currentUserName,
-        userRole: currentUserRole,
-        text: commentText,
-        createdAt: timestamp,
-      }).catch(fail);
-    }
-  };
-
-  // კომენტარის დამატება
-  const handleAddComment = (expenseId: string, text: string) => {
-    addItem('comments', {
-      expenseId,
-      userName: currentUserName,
-      userRole: currentUserRole,
-      text,
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
-
-  // დოკუმენტის დამატება
-  const handleAddDocument = (
-    newDoc: Omit<Document, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>,
-  ) => {
-    addItem('documents', {
-      ...newDoc,
-      uploadDate: new Date().toISOString(),
-      uploadedBy: currentUserName,
-      version: 1,
-    }).catch(fail);
-  };
-
-  // გადახდის დამატება
-  const handleAddPayment = (newPay: Omit<Payment, 'id' | 'createdAt'>) => {
-    addItem('payments', {
-      ...newPay,
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
-
-  // მიმწოდებლის დამატება
-  const handleAddSupplier = (newSup: Omit<Supplier, 'id' | 'createdAt'>) => {
-    addItem('suppliers', {
-      ...newSup,
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
-
-  // ტრანშის დამატება
-  const handleAddTranche = (
-    newTr: Omit<Tranche, 'id' | 'createdAt' | 'trancheNumber'>,
-  ) => {
-    addItem('tranches', {
-      ...newTr,
-      trancheNumber: tranches.length + 1,
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
-
-  // ხელფასის/ფიზ.პირის სტატუსის განახლება
-  const handleUpdatePayrollStatus = (
-    id: string,
-    updates: Partial<PayrollOrIndividualService>,
-  ) => {
-    updateItem('payroll', id, updates as object).catch(fail);
-  };
-
-  // ხელფასის/ფიზ.პირის დამატება
-  const handleAddPayroll = (
-    newPayr: Omit<PayrollOrIndividualService, 'id' | 'createdAt'>,
-  ) => {
-    addItem('payroll', {
-      ...newPayr,
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
-
-  // ბიუჯეტის კატეგორიის დამატება
-  const handleAddCategory = (newCat: Omit<Category, 'id'>) => {
-    addItem('categories', {
-      ...newCat,
-      comment: 'ხელით დამატებული ბიუჯეტის კატეგორია',
-      createdAt: new Date().toISOString(),
-    }).catch(fail);
-  };
+  // კატეგორიები & ბიუჯეტი
+  const addCategory = (name: string, plannedBudget: number) =>
+    addItem('categories', { name, plannedBudget, createdAt: new Date().toISOString() }).catch(fail);
+  const deleteCategory = (id: string) => deleteItem('categories', id).catch(fail);
+  const updateBudget = (amount: number) => saveBudget({ initialBudget: amount }).catch(fail);
 
   return (
     <MainLayout
       activeTab={activeTab}
       setActiveTab={setActiveTab}
-      currentUserRole={currentUserRole}
-      currentUserName={currentUserName}
+      currentUserRole={role}
+      currentUserName={currentUser.name}
       totalBudget={totalBudget}
       totalSpent={totalSpent}
       onLogout={logout}
@@ -244,8 +85,7 @@ export default function App() {
           expenses={expenses}
           categories={categories}
           payments={payments}
-          tranches={tranches}
-          notifications={notifications}
+          totalBudget={totalBudget}
           onNavigate={setActiveTab}
         />
       )}
@@ -255,76 +95,44 @@ export default function App() {
           expenses={expenses}
           categories={categories}
           suppliers={suppliers}
-          tranches={tranches}
-          payments={payments}
-          documents={documents}
-          comments={comments}
-          history={history}
-          currentUserRole={currentUserRole}
-          currentUserName={currentUserName}
-          onAddExpense={handleAddExpense}
-          onUpdateExpenseStatus={handleUpdateExpenseStatus}
-          onAddComment={handleAddComment}
-          onAddDocument={handleAddDocument}
-          onAddPayment={handleAddPayment}
-        />
-      )}
-
-      {activeTab === 'payroll' && (
-        <PayrollList
-          payrollList={payrollList}
-          taxSettings={taxSettings}
-          currentUserRole={currentUserRole}
-          onAddPayroll={handleAddPayroll}
-          onUpdatePayrollStatus={handleUpdatePayrollStatus}
+          canEdit={editable}
+          onAdd={addExpense}
+          onUpdate={updateExpense}
+          onDelete={deleteExpense}
         />
       )}
 
       {activeTab === 'suppliers' && (
         <SuppliersList
           suppliers={suppliers}
-          expenses={expenses}
-          currentUserRole={currentUserRole}
-          onAddSupplier={handleAddSupplier}
+          canEdit={editable}
+          onAdd={addSupplier}
+          onDelete={deleteSupplier}
         />
       )}
 
-      {activeTab === 'payments' && <PaymentsList payments={payments} expenses={expenses} />}
-
-      {activeTab === 'tranches' && (
-        <TranchesList
-          tranches={tranches}
-          currentUserRole={currentUserRole}
-          onAddTranche={handleAddTranche}
-        />
-      )}
-
-      {activeTab === 'reports' && (
-        <ReportsPanel
-          expenses={expenses}
-          categories={categories}
-          suppliers={suppliers}
+      {activeTab === 'payments' && (
+        <PaymentsList
           payments={payments}
-          documents={documents}
-          payrollList={payrollList}
-          tranches={tranches}
+          expenses={expenses}
+          canEdit={editable}
+          onAdd={addPayment}
+          onDelete={deletePayment}
         />
       )}
 
       {activeTab === 'settings' && (
         <SettingsPanel
-          currentUserRole={currentUserRole}
-          currentUserName={currentUserName}
-          currentUserId={currentUserId}
+          currentUserRole={role}
+          currentUserId={currentUser.id}
           users={users}
-          taxSettings={taxSettings}
           categories={categories}
-          onUpdateTaxSettings={saveTaxSettings}
-          onAddCategory={handleAddCategory}
+          totalBudget={totalBudget}
+          onAddCategory={addCategory}
+          onDeleteCategory={deleteCategory}
+          onUpdateBudget={updateBudget}
         />
       )}
-
-      {activeTab === 'docs' && <TechDocsPanel />}
     </MainLayout>
   );
 }
