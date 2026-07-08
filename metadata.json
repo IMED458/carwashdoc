@@ -1,0 +1,6 @@
+{
+  "name": "სამრეცხაოს გრანტის კონტროლი",
+  "description": "„აწარმოე საქართველოში“ გრანტის ფარგლებში ავტომანქანის თვითმომსახურების სამრეცხაოს მშენებლობისა და მოწყობის ხარჯების კონტროლის სისტემა",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
