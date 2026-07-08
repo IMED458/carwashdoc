@@ -1,25 +1,39 @@
-/**
- * გამარტივებული მონაცემთა მოდელი — ყველაფერი ქართულად.
- */
-
-export type UserRole = 'admin' | 'manager' | 'viewer';
+export type UserRole = 'admin' | 'accountant' | 'manager' | 'viewer' | 'uploader';
 
 export interface User {
   id: string;
   name: string;
-  username: string;
+  email?: string;
+  username?: string;
   passwordHash?: string;
   role: UserRole;
   isActive: boolean;
   createdAt?: string;
 }
 
-export type ExpenseStatus = 'draft' | 'approved' | 'paid' | 'rejected';
+export interface BudgetSettings {
+  initialBudget: number;
+  projectName: string;
+  currency: string;
+}
+
+export interface Tranche {
+  id: string;
+  trancheNumber: number;
+  receivedDate: string;
+  amount: number;
+  documentName: string;
+  comment: string;
+  createdAt: string;
+}
 
 export interface Category {
   id: string;
   name: string;
+  description?: string;
   plannedBudget: number;
+  isAllowedGrant?: boolean;
+  comment?: string;
   createdAt?: string;
 }
 
@@ -31,30 +45,176 @@ export interface Supplier {
   type: SupplierType;
   taxId: string;
   phone?: string;
+  email?: string;
   createdAt?: string;
+}
+
+export enum ExpenseStatus {
+  Draft = 'Draft',
+  Planned = 'Planned',
+  ContractSigned = 'Contract Signed',
+  WorkInProgress = 'Work in Progress',
+  Delivered = 'Delivered',
+  DocumentsMissing = 'Documents Missing',
+  PaymentPending = 'Payment Pending',
+  Paid = 'Paid',
+  SentToAccountant = 'Sent to Accountant',
+  AccountantReview = 'Accountant Review',
+  NeedsCorrection = 'Needs Correction',
+  ReadyForReporting = 'Ready for Reporting',
+  UploadedToRS = 'Uploaded to RS/Grant Portal',
+  Approved = 'Approved',
+  Rejected = 'Rejected',
+  Cancelled = 'Cancelled',
 }
 
 export interface Expense {
   id: string;
   title: string;
-  category: string; // თავისუფალი ტექსტი
-  supplier: string; // მიმწოდებელი / მიმღები (ხელფასის შემთხვევაში — პირის სახელი)
-  amount: number;
-  date: string; // YYYY-MM-DD
-  status: ExpenseStatus;
+  description: string;
+  categoryId: string;
+  supplierId: string;
+  category?: string;
+  supplier?: string;
+  trancheId?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  amountNoVat: number;
+  vat: number;
+  amountWithVat: number;
+  amount?: number;
+  date?: string;
   note?: string;
+  responsiblePerson: string;
+  projectStage: string;
+  internalComment?: string;
+  status: ExpenseStatus;
+  createdAt: string;
+  createdBy: string;
   createdByName?: string;
-  createdAt?: string;
+  updatedAt: string;
+  updatedBy: string;
 }
 
-export type PaymentMethod = 'bank' | 'cash' | 'card' | 'other';
+export type PaymentMethod = 'bank' | 'cash' | 'card' | 'pos' | 'other';
 
 export interface Payment {
   id: string;
   expenseId: string;
+  paymentDate: string;
+  date?: string;
   amount: number;
-  date: string; // YYYY-MM-DD
-  method: PaymentMethod;
+  paymentMethod: PaymentMethod;
+  method?: PaymentMethod;
+  payerAccount: string;
+  recipientName: string;
+  purpose: string;
+  bankTxNumber?: string;
+  fee: number;
+  receiptFile?: string;
   note?: string;
-  createdAt?: string;
+  comment?: string;
+  checkedBy?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export type DocumentType =
+  | 'invoice'
+  | 'waybill'
+  | 'tax_doc'
+  | 'contract'
+  | 'acceptance_act'
+  | 'receipt'
+  | 'other';
+
+export interface Document {
+  id: string;
+  expenseId: string;
+  docType: DocumentType;
+  docNumber: string;
+  docDate: string;
+  fileName: string;
+  fileSize: string;
+  fileType?: string;
+  uploadDate: string;
+  uploadedBy: string;
+  status: 'active' | 'cancelled';
+  amount: number;
+  comment?: string;
+  checksum: string;
+  version: number;
+}
+
+export interface PayrollOrIndividualService {
+  id: string;
+  name: string;
+  personalId: string;
+  workDescription: string;
+  contractNumber: string;
+  contractDate: string;
+  startDate: string;
+  endDate: string;
+  grossAmount: number;
+  netAmount: number;
+  taxesAmount: number;
+  pensionDeduction: number;
+  paymentDate?: string;
+  hasAcceptanceAct: boolean;
+  hasPaymentDoc: boolean;
+  accountantComment?: string;
+  createdAt: string;
+}
+
+export interface TaxSettings {
+  incomeTaxPercent: number;
+  pensionEmployeePercent: number;
+  pensionEmployerPercent: number;
+}
+
+export interface Comment {
+  id: string;
+  expenseId: string;
+  userName: string;
+  userRole: UserRole;
+  text: string;
+  createdAt: string;
+}
+
+export interface StatusHistory {
+  id: string;
+  expenseId: string;
+  fromStatus: ExpenseStatus;
+  toStatus: ExpenseStatus;
+  changedBy: string;
+  changeDate: string;
+  comment?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userName: string;
+  userRole: UserRole;
+  action: string;
+  details: string;
+  timestamp: string;
+  ipAddress: string;
+  device: string;
+}
+
+export interface Notification {
+  id: string;
+  type: 'warning' | 'info' | 'success' | 'error';
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  expenseId?: string;
+}
+
+export interface ExportLog {
+  id: string;
+  reportName: string;
+  exportedBy: string;
+  timestamp: string;
+  format: 'PDF' | 'Excel' | 'CSV' | 'ZIP';
 }
