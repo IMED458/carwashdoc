@@ -8,6 +8,7 @@ import SuppliersList, { SupplierForm } from './components/SuppliersList';
 import PaymentsList from './components/PaymentsList';
 import ReportsPanel from './components/ReportsPanel';
 import SettingsPanel from './components/SettingsPanel';
+import SignaturesPage from './components/signatures/SignaturesPage';
 
 import { useAuth } from './context/AuthContext';
 import { useCollection, useDocState } from './hooks/useFirestore';
@@ -319,6 +320,10 @@ export default function App() {
           onUpdate={updatePayment}
           onDelete={deletePayment}
         />
+      )}
+
+      {activeTab === 'signatures' && (
+        <SignaturesPage currentUser={{ id: currentUser.id, name: currentUser.name }} />
       )}
 
       {activeTab === 'reports' && (

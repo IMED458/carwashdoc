@@ -6,6 +6,7 @@ import {
   CreditCard,
   BarChart3,
   Settings,
+  PenTool,
   Menu,
   X,
   LogOut,
@@ -30,6 +31,7 @@ const MENU = [
   { id: 'expenses', name: 'ხარჯების რეესტრი', icon: Receipt },
   { id: 'suppliers', name: 'მიმწოდებლები', icon: Building2 },
   { id: 'payments', name: 'გადახდების ჟურნალი', icon: CreditCard },
+  { id: 'signatures', name: 'ხელმოწერები', icon: PenTool },
   { id: 'reports', name: 'ანგარიშები & ექსპორტი', icon: BarChart3 },
   { id: 'settings', name: 'პარამეტრები', icon: Settings },
 ];

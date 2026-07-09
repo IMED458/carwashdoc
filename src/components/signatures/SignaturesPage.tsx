@@ -1,0 +1,311 @@
+import React, { useMemo, useState } from 'react';
+import { PenTool, Plus, X, Upload, Trash2, Download, Send, Loader2, Ban, RefreshCw, FileSignature } from 'lucide-react';
+import { useCollection } from '../../hooks/useFirestore';
+import { uploadFileTo } from '../../services/storage';
+import { fetchBytes, sha256Hex } from '../../services/pdfSign';
+import { sendSignEmail } from '../../config/emailjs';
+import {
+  createSignatureRequest,
+  cancelRequest,
+  SignatureRequest,
+  SignRole,
+  SignRequestStatus,
+  AuditEntry,
+  randomToken,
+} from '../../services/signatures';
+
+const REQ_STATUS: Record<SignRequestStatus, { t: string; c: string }> = {
+  draft: { t: 'მონახაზი', c: 'bg-slate-100 text-slate-600' },
+  sent: { t: 'გაგზავნილი', c: 'bg-blue-50 text-blue-600' },
+  opened: { t: 'გახსნილი', c: 'bg-indigo-50 text-indigo-600' },
+  partially_signed: { t: 'ნაწილობრივ', c: 'bg-amber-50 text-amber-700' },
+  signed: { t: 'ხელმოწერილი', c: 'bg-emerald-50 text-emerald-700' },
+  declined: { t: 'უარყოფილი', c: 'bg-red-50 text-red-600' },
+  expired: { t: 'ვადაგასული', c: 'bg-red-50 text-red-600' },
+  cancelled: { t: 'გაუქმებული', c: 'bg-slate-100 text-slate-500' },
+};
+const ROLE_LABEL: Record<SignRole, string> = { signer: 'ხელმომწერი', viewer: 'დამთვალიერებელი', approver: 'დამმოწმებელი' };
+
+interface Row {
+  name: string;
+  email: string;
+  role: SignRole;
+}
+
+export default function SignaturesPage({ currentUser }: { currentUser: { id: string; name: string } }) {
+  const requests = useCollection<SignatureRequest>('signatureRequests');
+  const audit = useCollection<AuditEntry & { id: string }>('signAudit');
+  const [modal, setModal] = useState(false);
+  const [detail, setDetail] = useState<SignatureRequest | null>(null);
+
+  const detailReq = detail ? requests.find((r) => r.id === detail.id) || detail : null;
+
+  const sorted = useMemo(() => [...requests].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)), [requests]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-black text-slate-800">ხელმოწერები</h2>
+          <p className="text-xs text-slate-500 mt-1">PDF დოკუმენტების ელექტრონული ხელმოწერა და გაგზავნა.</p>
+        </div>
+        <button onClick={() => setModal(true)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm">
+          <Plus className="h-4 w-4" /> ახალი ხელმოწერა
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-50">
+        {sorted.length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-sm flex flex-col items-center gap-2">
+            <FileSignature className="h-8 w-8 text-slate-300" /> ხელმოწერის მოთხოვნები ჯერ არ არის.
+          </div>
+        ) : (
+          sorted.map((r) => {
+            const st = REQ_STATUS[r.status] || REQ_STATUS.sent;
+            const signed = r.recipients.filter((x) => x.status === 'signed').length;
+            return (
+              <button key={r.id} onClick={() => setDetail(r)} className="w-full flex items-center justify-between p-4 gap-3 text-left hover:bg-slate-50/50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <PenTool className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-sm text-slate-800 block truncate">{r.title}</span>
+                    <span className="text-[11px] text-slate-400">{signed}/{r.recipients.length} ხელმოწერილი · {new Date(r.createdAt).toLocaleDateString('ka-GE')}</span>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${st.c}`}>{st.t}</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      {modal && <RequestModal currentUser={currentUser} onClose={() => setModal(false)} />}
+      {detailReq && <RequestDetail request={detailReq} audit={audit.filter((a) => a.requestId === detailReq.id)} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+/* ---------- NEW REQUEST ---------- */
+function RequestModal({ currentUser, onClose }: { currentUser: { id: string; name: string }; onClose: () => void }) {
+  const [title, setTitle] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [rows, setRows] = useState<Row[]>([{ name: '', email: '', role: 'signer' }]);
+  const [message, setMessage] = useState('გთხოვთ მოაწეროთ ხელი დოკუმენტს.');
+  const [days, setDays] = useState(7);
+  const [busy, setBusy] = useState(false);
+
+  const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addRow = () => setRows((rs) => [...rs, { name: '', email: '', role: 'signer' }]);
+  const delRow = (i: number) => setRows((rs) => rs.filter((_, j) => j !== i));
+
+  const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+  const submit = async () => {
+    if (!file) return alert('ატვირთეთ PDF ფაილი.');
+    if (file.type !== 'application/pdf') return alert('დაშვებულია მხოლოდ PDF.');
+    const valid = rows.filter((r) => r.name.trim() && validEmail(r.email));
+    if (valid.length === 0) return alert('დაამატეთ მინიმუმ ერთი ხელმომწერი სწორი ელფოსტით.');
+
+    setBusy(true);
+    try {
+      const reqTitle = title.trim() || file.name.replace(/\.pdf$/i, '');
+      const tmpId = randomToken().slice(0, 10);
+      const path = `documents/sign/${tmpId}/original.pdf`;
+      const url = await uploadFileTo(path, file);
+      const hash = await sha256Hex(await fetchBytes(url));
+      const expiresAt = new Date(Date.now() + days * 864e5).toISOString();
+
+      const request = await createSignatureRequest({
+        title: reqTitle,
+        originalUrl: url,
+        originalPath: path,
+        originalHash: hash,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        message,
+        expiresAt,
+        recipients: valid.map((r, i) => ({ name: r.name, email: r.email, role: r.role, order: i + 1 })),
+      });
+
+      // მეილების გაგზავნა
+      const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
+      const expLabel = new Date(expiresAt).toLocaleDateString('ka-GE');
+      for (const rec of request.recipients) {
+        try {
+          await sendSignEmail({
+            to_email: rec.email,
+            recipient_name: rec.name,
+            sender_name: currentUser.name,
+            document_name: reqTitle,
+            expiration_date: expLabel,
+            message,
+            sign_url: `${base}${rec.token}`,
+          });
+        } catch (e) {
+          console.error('email failed', rec.email, e);
+        }
+      }
+      alert('დოკუმენტი გაიგზავნა ხელმოსაწერად!');
+      onClose();
+    } catch (e) {
+      alert('ვერ გაიგზავნა: ' + ((e as Error)?.message || 'შეცდომა'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
+          <h3 className="font-bold text-slate-800">ახალი ხელმოწერის მოთხოვნა</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">PDF დოკუმენტი *</label>
+            <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">დასახელება</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="(ავტომატურად ფაილის სახელი)" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm" />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-500">ხელმომწერები</label>
+            {rows.map((r, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="სახელი გვარი" className="col-span-4 px-2 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs" />
+                <input value={r.email} onChange={(e) => setRow(i, { email: e.target.value })} placeholder="ელფოსტა" className="col-span-4 px-2 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs" />
+                <select value={r.role} onChange={(e) => setRow(i, { role: e.target.value as SignRole })} className="col-span-3 px-1 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                  <option value="signer">ხელმომწერი</option>
+                  <option value="viewer">დამთვალიერებელი</option>
+                  <option value="approver">დამმოწმებელი</option>
+                </select>
+                <button onClick={() => delRow(i)} className="col-span-1 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+            <button onClick={addRow} className="text-xs font-bold text-indigo-600 flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> ხელმომწერის დამატება</button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">ვადა</label>
+              <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm">
+                <option value={3}>3 დღე</option>
+                <option value={7}>7 დღე</option>
+                <option value={14}>14 დღე</option>
+                <option value={30}>30 დღე</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">შეტყობინება</label>
+            <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm resize-none" />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">გაუქმება</button>
+            <button onClick={submit} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {busy ? 'იგზავნება...' : 'გაგზავნა'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- DETAIL ---------- */
+function RequestDetail({ request, audit, onClose }: { request: SignatureRequest; audit: (AuditEntry & { id: string })[]; onClose: () => void }) {
+  const resend = async (email: string, token: string) => {
+    const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
+    try {
+      const rec = request.recipients.find((r) => r.token === token)!;
+      await sendSignEmail({
+        to_email: email,
+        recipient_name: rec.name,
+        sender_name: request.senderName,
+        document_name: request.title,
+        expiration_date: new Date(request.expiresAt).toLocaleDateString('ka-GE'),
+        message: request.message,
+        sign_url: `${base}${token}`,
+      });
+      alert('ხელახლა გაიგზავნა.');
+    } catch (e) {
+      alert('ვერ გაიგზავნა: ' + ((e as Error)?.message || ''));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
+          <h3 className="font-bold text-slate-800 truncate">{request.title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-5 space-y-5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${REQ_STATUS[request.status]?.c}`}>{REQ_STATUS[request.status]?.t}</span>
+            {request.signedUrl && (
+              <a href={request.signedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg">
+                <Download className="h-3.5 w-3.5" /> ხელმოწერილი PDF
+              </a>
+            )}
+            <a href={request.originalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">
+              ორიგინალი
+            </a>
+            {request.status !== 'cancelled' && request.status !== 'signed' && (
+              <button onClick={() => confirm('გაუქმდეს მოთხოვნა?') && cancelRequest(request.id)} className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-bold rounded-lg">
+                <Ban className="h-3.5 w-3.5" /> გაუქმება
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-slate-500">ხელმომწერები</span>
+            {request.recipients.map((r) => (
+              <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs gap-2">
+                <div className="min-w-0">
+                  <span className="font-bold text-slate-800 block truncate">{r.name} <span className="text-slate-400 font-normal">({ROLE_LABEL[r.role]})</span></span>
+                  <span className="text-[10px] text-slate-400">{r.email}</span>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    {r.openedAt && `გახსნა: ${new Date(r.openedAt).toLocaleString('ka-GE')} · `}
+                    {r.signedAt && `ხელი: ${new Date(r.signedAt).toLocaleString('ka-GE')}`}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.status === 'signed' ? 'bg-emerald-50 text-emerald-600' : r.status === 'opened' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                    {r.status === 'signed' ? 'ხელმოწერილი' : r.status === 'opened' ? 'გახსნილი' : 'გაგზავნილი'}
+                  </span>
+                  {r.status !== 'signed' && request.status !== 'cancelled' && (
+                    <button onClick={() => resend(r.email, r.token)} title="ხელახლა გაგზავნა" className="text-slate-400 hover:text-indigo-600"><RefreshCw className="h-3.5 w-3.5" /></button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-slate-500">ისტორია (Audit)</span>
+            <div className="space-y-1">
+              {audit.length === 0 ? (
+                <p className="text-[11px] text-slate-400">ჩანაწერები არ არის.</p>
+              ) : (
+                audit.slice().sort((a, b) => (a.at > b.at ? 1 : -1)).map((a) => (
+                  <div key={a.id} className="text-[11px] text-slate-500 border-l-2 border-slate-200 pl-2">
+                    <strong className="text-slate-700">{a.action}</strong> {a.meta && `· ${a.meta}`} · {new Date(a.at).toLocaleString('ka-GE')}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

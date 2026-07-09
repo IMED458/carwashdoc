@@ -11,10 +11,12 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "firebase": "^12.15.0",
     "lucide-react": "^0.546.0",
+    "pdf-lib": "^1.17.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3"
