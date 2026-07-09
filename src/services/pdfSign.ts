@@ -30,8 +30,8 @@ export function composeStamp(
   info: { name: string; email: string; date: string },
 ): Promise<string> {
   return new Promise((resolve) => {
-    const W = 460;
-    const H = 200;
+    const W = 720;
+    const H = 260;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
@@ -41,24 +41,24 @@ export function composeStamp(
 
     const img = new Image();
     img.onload = () => {
-      // ხელმოწერის სურათი ზედა ნაწილში, პროპორციულად
-      const maxW = W - 20;
-      const maxH = 120;
+      // ხელმოწერის სურათი ზედა ნაწილში, პროპორციულად და მოჭრის გარეშე.
+      const maxW = W - 44;
+      const maxH = 150;
       let w = img.width;
       let h = img.height;
       const scale = Math.min(maxW / w, maxH / h, 1);
       w *= scale;
       h *= scale;
-      ctx.drawImage(img, (W - w) / 2, 6, w, h);
+      ctx.drawImage(img, (W - w) / 2, 16 + (maxH - h) / 2, w, h);
 
       // წარწერა
       ctx.fillStyle = '#166534';
-      ctx.font = 'bold 18px "Noto Sans Georgian", Arial, sans-serif';
-      ctx.fillText(`ხელმოწერილია: ${info.name}`, 12, 148);
-      ctx.fillStyle = '#334155';
-      ctx.font = '15px "Noto Sans Georgian", Arial, sans-serif';
-      ctx.fillText(`თარიღი: ${info.date}`, 12, 170);
-      ctx.fillText(`ელფოსტა: ${info.email}`, 12, 190);
+      ctx.font = '700 23px "Noto Sans Georgian", "DejaVu Sans", Arial, sans-serif';
+      ctx.fillText(`ხელმოწერილია: ${info.name}`, 26, 196);
+      ctx.fillStyle = '#475569';
+      ctx.font = '18px "Noto Sans Georgian", "DejaVu Sans", Arial, sans-serif';
+      ctx.fillText(`თარიღი: ${info.date}`, 26, 222);
+      ctx.fillText(`ელფოსტა: ${info.email}`, 26, 246);
       resolve(canvas.toDataURL('image/png'));
     };
     img.src = signatureDataUrl;
@@ -86,8 +86,8 @@ export async function signPdf(
   const page = pages[idx];
   const { height: ph } = page.getSize();
 
-  const w = field?.width || 230;
-  const h = field?.height || 100;
+  const w = Math.max(field?.width || 260, 240);
+  const h = Math.max(field?.height || 118, 108);
   const x = field?.x ?? 40;
   // field.y მოდის viewer-ის top-left სისტემიდან; PDF bottom-left-ია
   const y = field?.y != null ? Math.max(10, ph - field.y - h) : 40;

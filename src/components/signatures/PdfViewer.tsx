@@ -29,14 +29,21 @@ interface Props {
 }
 
 const DEF_W = 200;
-const DEF_H = 70;
+const DEF_H = 110;
+const MIN_W = 160;
+const MIN_H = 82;
 
 export default function PdfViewer({ source, placeable = false, field = null, onField, maxWidth = 700 }: Props) {
   const [pages, setPages] = useState<PageMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const action = useRef<
+    | { type: 'move'; dx: number; dy: number }
+    | { type: 'resize'; startX: number; startY: number; startW: number; startH: number }
+    | null
+  >(null);
+  const skipClick = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,14 +96,19 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
 
   const placeOnPage = (pageNum: number, e: React.MouseEvent, meta: PageMeta) => {
     if (!placeable || !onField) return;
-    if (drag.current) return;
+    if (skipClick.current) {
+      skipClick.current = false;
+      return;
+    }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
+    const x = Math.max(0, Math.min(meta.cssW - DEF_W * meta.scale, cssX - (DEF_W * meta.scale) / 2) / meta.scale);
+    const y = Math.max(0, Math.min(meta.cssH - DEF_H * meta.scale, cssY - (DEF_H * meta.scale) / 2) / meta.scale);
     onField({
       page: pageNum,
-      x: Math.max(0, cssX / meta.scale - DEF_W / 2),
-      y: Math.max(0, cssY / meta.scale - DEF_H / 2),
+      x,
+      y,
       width: DEF_W,
       height: DEF_H,
     });
@@ -104,22 +116,53 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
 
   const onBoxDown = (e: React.PointerEvent) => {
     e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    drag.current = { dx: e.clientX - box.left, dy: e.clientY - box.top };
+    action.current = { type: 'move', dx: e.clientX - box.left, dy: e.clientY - box.top };
+  };
+  const onResizeDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (!field) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    action.current = {
+      type: 'resize',
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: field.width,
+      startH: field.height,
+    };
   };
   const onBoxMove = (e: React.PointerEvent, meta: PageMeta, wrapper: HTMLElement | null) => {
-    if (!drag.current || !onField || !field || !wrapper) return;
+    if (!action.current || !onField || !field || !wrapper) return;
     const rect = wrapper.getBoundingClientRect();
-    const cssX = e.clientX - rect.left - drag.current.dx;
-    const cssY = e.clientY - rect.top - drag.current.dy;
-    onField({
-      ...field,
-      x: Math.max(0, Math.min(meta.cssW - field.width * meta.scale, cssX) / meta.scale),
-      y: Math.max(0, Math.min(meta.cssH - field.height * meta.scale, cssY) / meta.scale),
-    });
+    if (action.current.type === 'move') {
+      const cssX = e.clientX - rect.left - action.current.dx;
+      const cssY = e.clientY - rect.top - action.current.dy;
+      onField({
+        ...field,
+        x: Math.max(0, Math.min(meta.cssW - field.width * meta.scale, cssX) / meta.scale),
+        y: Math.max(0, Math.min(meta.cssH - field.height * meta.scale, cssY) / meta.scale),
+      });
+    } else {
+      const nextW = Math.max(MIN_W, action.current.startW + (e.clientX - action.current.startX) / meta.scale);
+      const nextH = Math.max(MIN_H, action.current.startH + (e.clientY - action.current.startY) / meta.scale);
+      onField({
+        ...field,
+        width: Math.min(nextW, meta.cssW / meta.scale - field.x),
+        height: Math.min(nextH, meta.cssH / meta.scale - field.y),
+      });
+    }
   };
-  const onBoxUp = () => (drag.current = null);
+  const onBoxUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (action.current) {
+      action.current = null;
+      skipClick.current = true;
+      window.setTimeout(() => {
+        skipClick.current = false;
+      }, 0);
+    }
+  };
 
   if (loading)
     return (
@@ -133,15 +176,13 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
     <div className="space-y-4 flex flex-col items-center bg-slate-100 py-4 rounded-xl">
       {placeable && (
         <div className="text-[11px] text-indigo-600 font-semibold flex items-center gap-1.5">
-          <PenLine className="h-3.5 w-3.5" /> დააჭირეთ გვერდზე, სადაც ხელმოწერა უნდა ჩაჯდეს (ბლოკის გადატანა შესაძლებელია)
+          <PenLine className="h-3.5 w-3.5" /> დააჭირეთ გვერდზე ხელმოწერის დასასმელად; გადაათრიეთ ბლოკი და კუთხით შეცვალეთ ზომა
         </div>
       )}
       {pages.map((m, i) => {
-        let wrapperEl: HTMLElement | null = null;
         return (
           <div
             key={m.num}
-            ref={(el) => (wrapperEl = el)}
             onClick={(e) => placeOnPage(m.num, e, m)}
             className="relative shadow-md bg-white"
             style={{ width: m.cssW, height: m.cssH, cursor: placeable ? 'crosshair' : 'default' }}
@@ -150,9 +191,10 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
             {placeable && field && field.page === m.num && (
               <div
                 onPointerDown={onBoxDown}
-                onPointerMove={(e) => onBoxMove(e, m, wrapperEl)}
+                onPointerMove={(e) => onBoxMove(e, m, e.currentTarget.parentElement as HTMLElement | null)}
                 onPointerUp={onBoxUp}
-                className="absolute border-2 border-dashed border-emerald-500 bg-emerald-400/20 flex items-center justify-center cursor-move touch-none"
+                onPointerCancel={onBoxUp}
+                className="absolute border-2 border-dashed border-emerald-500 bg-emerald-400/20 flex items-center justify-center cursor-move touch-none group"
                 style={{
                   left: field.x * m.scale,
                   top: field.y * m.scale,
@@ -161,6 +203,15 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
                 }}
               >
                 <span className="text-[10px] font-bold text-emerald-700 pointer-events-none">ხელმოწერა</span>
+                <button
+                  type="button"
+                  aria-label="ზომის შეცვლა"
+                  onPointerDown={onResizeDown}
+                  onPointerMove={(e) => onBoxMove(e, m, e.currentTarget.parentElement?.parentElement as HTMLElement | null)}
+                  onPointerUp={onBoxUp}
+                  onPointerCancel={onBoxUp}
+                  className="absolute -right-2 -bottom-2 h-5 w-5 rounded-full bg-emerald-600 border-2 border-white shadow cursor-nwse-resize"
+                />
               </div>
             )}
             <span className="absolute bottom-1 right-2 text-[10px] text-slate-400">{m.num}</span>

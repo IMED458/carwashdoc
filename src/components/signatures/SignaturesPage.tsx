@@ -7,6 +7,9 @@ import { sendSignEmail } from '../../config/emailjs';
 import PdfViewer, { PlacedField } from './PdfViewer';
 import {
   createSignatureRequest,
+  saveSignatureDraft,
+  updateSignatureDraft,
+  sendSignatureRequest,
   cancelRequest,
   SignatureRequest,
   SignRole,
@@ -37,6 +40,7 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
   const requests = useCollection<SignatureRequest>('signatureRequests');
   const audit = useCollection<AuditEntry & { id: string }>('signAudit');
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<SignatureRequest | null>(null);
   const [detail, setDetail] = useState<SignatureRequest | null>(null);
 
   const detailReq = detail ? requests.find((r) => r.id === detail.id) || detail : null;
@@ -50,7 +54,7 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
           <h2 className="text-xl font-black text-slate-800">ხელმოწერები</h2>
           <p className="text-xs text-slate-500 mt-1">PDF დოკუმენტების ელექტრონული ხელმოწერა და გაგზავნა.</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm">
+        <button onClick={() => { setEditing(null); setModal(true); }} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm">
           <Plus className="h-4 w-4" /> ახალი ხელმოწერა
         </button>
       </div>
@@ -82,21 +86,66 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
         )}
       </div>
 
-      {modal && <RequestModal currentUser={currentUser} onClose={() => setModal(false)} />}
-      {detailReq && <RequestDetail request={detailReq} audit={audit.filter((a) => a.requestId === detailReq.id)} onClose={() => setDetail(null)} />}
+      {modal && (
+        <RequestModal
+          currentUser={currentUser}
+          editing={editing}
+          onClose={() => {
+            setModal(false);
+            setEditing(null);
+          }}
+        />
+      )}
+      {detailReq && (
+        <RequestDetail
+          request={detailReq}
+          audit={audit.filter((a) => a.requestId === detailReq.id)}
+          onEdit={(request) => {
+            setDetail(null);
+            setEditing(request);
+            setModal(true);
+          }}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </div>
   );
 }
 
 /* ---------- NEW REQUEST ---------- */
-function RequestModal({ currentUser, onClose }: { currentUser: { id: string; name: string }; onClose: () => void }) {
-  const [title, setTitle] = useState('');
+function RequestModal({
+  currentUser,
+  editing,
+  onClose,
+}: {
+  currentUser: { id: string; name: string };
+  editing?: SignatureRequest | null;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(editing?.title || '');
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
-  const [field, setField] = useState<PlacedField | null>(null);
-  const [rows, setRows] = useState<Row[]>([{ name: '', email: '', role: 'signer' }]);
-  const [message, setMessage] = useState('გთხოვთ მოაწეროთ ხელი დოკუმენტს.');
-  const [days, setDays] = useState(7);
+  const [field, setField] = useState<PlacedField | null>(
+    editing?.fields?.[0]
+      ? {
+          page: editing.fields[0].page,
+          x: editing.fields[0].x,
+          y: editing.fields[0].y,
+          width: editing.fields[0].width,
+          height: editing.fields[0].height,
+        }
+      : null,
+  );
+  const [rows, setRows] = useState<Row[]>(
+    editing?.recipients?.length
+      ? editing.recipients.map((r) => ({ name: r.name, email: r.email, role: r.role }))
+      : [{ name: '', email: '', role: 'signer' }],
+  );
+  const [message, setMessage] = useState(editing?.message || 'გთხოვთ მოაწეროთ ხელი დოკუმენტს.');
+  const [days, setDays] = useState(() => {
+    if (!editing?.expiresAt) return 7;
+    return Math.max(1, Math.round((new Date(editing.expiresAt).getTime() - Date.now()) / 864e5));
+  });
   const [busy, setBusy] = useState(false);
 
   const onPickFile = async (f: File | null) => {
@@ -114,22 +163,31 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
 
   const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  const submit = async () => {
-    if (!file) return alert('ატვირთეთ PDF ფაილი.');
-    if (file.type !== 'application/pdf') return alert('დაშვებულია მხოლოდ PDF.');
-    const valid = rows.filter((r) => r.name.trim() && validEmail(r.email));
-    if (valid.length === 0) return alert('დაამატეთ მინიმუმ ერთი ხელმომწერი სწორი ელფოსტით.');
+  const persist = async (mode: 'draft' | 'send') => {
+    if (!file && !editing?.originalUrl) return alert('ატვირთეთ PDF ფაილი.');
+    if (file && file.type !== 'application/pdf') return alert('დაშვებულია მხოლოდ PDF.');
+    const cleanRows = rows
+      .map((r) => ({ ...r, name: r.name.trim(), email: r.email.trim() }))
+      .filter((r) => r.name || r.email);
+    const validRows = cleanRows.filter((r) => r.name && validEmail(r.email));
+    if (mode === 'send' && validRows.length === 0) return alert('გაგზავნისთვის დაამატეთ მინიმუმ ერთი ხელმომწერი სწორი ელფოსტით.');
+    if (mode === 'draft' && cleanRows.some((r) => r.email && !validEmail(r.email))) return alert('ელფოსტის ფორმატი არასწორია.');
 
     setBusy(true);
     try {
-      const reqTitle = title.trim() || file.name.replace(/\.pdf$/i, '');
-      const tmpId = randomToken().slice(0, 10);
-      const path = `documents/sign/${tmpId}/original.pdf`;
-      const url = await uploadFileTo(path, file);
-      const hash = await sha256Hex(await fetchBytes(url));
+      const reqTitle = title.trim() || file?.name.replace(/\.pdf$/i, '') || editing?.title || 'ხელმოსაწერი დოკუმენტი';
+      const tmpId = editing?.id || randomToken().slice(0, 10);
+      let path = editing?.originalPath || `documents/sign/${tmpId}/original.pdf`;
+      let url = editing?.originalUrl || '';
+      let hash = editing?.originalHash || '';
+      if (file) {
+        path = `documents/sign/${tmpId}/original.pdf`;
+        url = await uploadFileTo(path, file);
+        hash = await sha256Hex(await fetchBytes(url));
+      }
       const expiresAt = new Date(Date.now() + days * 864e5).toISOString();
 
-      const request = await createSignatureRequest({
+      const input = {
         title: reqTitle,
         originalUrl: url,
         originalPath: path,
@@ -138,14 +196,32 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
         senderName: currentUser.name,
         message,
         expiresAt,
-        recipients: valid.map((r, i) => ({ name: r.name, email: r.email, role: r.role, order: i + 1 })),
+        recipients: (mode === 'send' ? validRows : cleanRows).map((r, i) => ({ name: r.name, email: r.email, role: r.role, order: i + 1 })),
         fields: field ? [{ page: field.page, x: field.x, y: field.y, width: field.width, height: field.height }] : [],
-      });
+      };
+
+      let request: SignatureRequest | null;
+      if (editing) {
+        request = await updateSignatureDraft(editing.id, input);
+      } else if (mode === 'draft') {
+        request = await saveSignatureDraft(input);
+      } else {
+        request = await createSignatureRequest(input);
+      }
+
+      if (mode === 'draft') {
+        alert('დრაფტი შენახულია.');
+        onClose();
+        return;
+      }
+
+      if (editing) request = await sendSignatureRequest(editing.id);
+      if (!request) throw new Error('მოთხოვნა ვერ მოიძებნა.');
 
       // მეილების გაგზავნა
       const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
       const expLabel = new Date(expiresAt).toLocaleDateString('ka-GE');
-      for (const rec of request.recipients) {
+      for (const rec of request.recipients.filter((r) => r.email && r.role !== 'viewer')) {
         try {
           await sendSignEmail({
             to_email: rec.email,
@@ -173,7 +249,7 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="font-bold text-slate-800">ახალი ხელმოწერის მოთხოვნა</h3>
+          <h3 className="font-bold text-slate-800">{editing ? 'ხელმოწერის დრაფტის რედაქტირება' : 'ახალი ხელმოწერის მოთხოვნა'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -181,11 +257,12 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
             <label className="block text-xs font-bold text-slate-500 mb-1">PDF დოკუმენტი *</label>
             <input type="file" accept="application/pdf" onChange={(e) => onPickFile(e.target.files?.[0] || null)}
               className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-bold" />
+            {editing?.originalUrl && !file && <p className="text-[11px] text-slate-400 mt-1">მიმდინარე PDF შენარჩუნდება, თუ ახალს არ ატვირთავთ.</p>}
           </div>
 
-          {fileBytes && (
+          {(fileBytes || editing?.originalUrl) && (
             <div className="border border-slate-200 rounded-xl overflow-y-auto max-h-72">
-              <PdfViewer source={fileBytes} placeable field={field} onField={setField} maxWidth={460} />
+              <PdfViewer source={fileBytes || editing!.originalUrl} placeable field={field} onField={setField} maxWidth={460} />
             </div>
           )}
           <div>
@@ -228,7 +305,11 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
 
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">გაუქმება</button>
-            <button onClick={submit} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl">
+            <button onClick={() => persist('draft')} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-60 text-white text-sm font-bold rounded-xl">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+              დრაფტად შენახვა
+            </button>
+            <button onClick={() => persist('send')} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {busy ? 'იგზავნება...' : 'გაგზავნა'}
             </button>
@@ -240,7 +321,17 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
 }
 
 /* ---------- DETAIL ---------- */
-function RequestDetail({ request, audit, onClose }: { request: SignatureRequest; audit: (AuditEntry & { id: string })[]; onClose: () => void }) {
+function RequestDetail({
+  request,
+  audit,
+  onEdit,
+  onClose,
+}: {
+  request: SignatureRequest;
+  audit: (AuditEntry & { id: string })[];
+  onEdit: (request: SignatureRequest) => void;
+  onClose: () => void;
+}) {
   const resend = async (email: string, token: string) => {
     const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
     try {
@@ -278,6 +369,11 @@ function RequestDetail({ request, audit, onClose }: { request: SignatureRequest;
             <a href={request.originalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">
               ორიგინალი
             </a>
+            {request.status === 'draft' && (
+              <button onClick={() => onEdit(request)} className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg">
+                <FileSignature className="h-3.5 w-3.5" /> დრაფტის რედაქტირება
+              </button>
+            )}
             {request.status !== 'cancelled' && request.status !== 'signed' && (
               <button onClick={() => confirm('გაუქმდეს მოთხოვნა?') && cancelRequest(request.id)} className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-bold rounded-lg">
                 <Ban className="h-3.5 w-3.5" /> გაუქმება

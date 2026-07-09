@@ -15,7 +15,7 @@ export type SignRequestStatus =
   | 'declined'
   | 'expired'
   | 'cancelled';
-export type SignatureType = 'text' | 'draw' | 'upload';
+export type SignatureType = 'draw' | 'upload';
 
 export interface SignField {
   recipientId: string;
@@ -60,6 +60,7 @@ export interface SignatureRequest {
   recipients: SignRecipient[];
   fields: SignField[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AuditEntry {
@@ -101,23 +102,99 @@ export interface CreateRequestInput {
   fields?: Omit<SignField, 'recipientId'>[];
 }
 
-/** ხელმოწერის მოთხოვნის შექმნა + token-ების გენერაცია. აბრუნებს request-ს. */
-export async function createSignatureRequest(input: CreateRequestInput): Promise<SignatureRequest> {
-  const recipients: SignRecipient[] = input.recipients.map((r, i) => ({
+function buildRecipients(input: CreateRequestInput, status: SignRecipientStatus): SignRecipient[] {
+  return input.recipients.map((r, i) => ({
     id: `r${i}_${randomToken().slice(0, 8)}`,
     name: r.name.trim(),
     email: r.email.trim(),
     role: r.role,
     order: r.order,
-    status: 'sent',
+    status,
     token: randomToken(),
-    sentAt: nowIso(),
+    ...(status === 'sent' ? { sentAt: nowIso() } : {}),
   }));
+}
 
-  const fields: SignField[] = (input.fields || []).map((f) => ({
+function buildFields(input: CreateRequestInput, recipients: SignRecipient[]): SignField[] {
+  return (input.fields || []).map((f) => ({
     ...f,
     recipientId: recipients[0]?.id || '',
   }));
+}
+
+async function writeTokenMap(requestId: string, recipients: SignRecipient[]): Promise<void> {
+  await Promise.all(
+    recipients.map((r) => setItem('signTokens', r.token, { requestId, recipientId: r.id, used: false })),
+  );
+}
+
+/** ხელმოწერის მოთხოვნის დრაფტად შენახვა. */
+export async function saveSignatureDraft(input: CreateRequestInput): Promise<SignatureRequest> {
+  const recipients = buildRecipients(input, 'pending');
+  const fields = buildFields(input, recipients);
+
+  const request: Omit<SignatureRequest, 'id'> = {
+    title: input.title,
+    originalUrl: input.originalUrl,
+    originalPath: input.originalPath,
+    originalHash: input.originalHash || '',
+    status: 'draft',
+    senderId: input.senderId,
+    senderName: input.senderName,
+    message: input.message,
+    expiresAt: input.expiresAt,
+    recipients,
+    fields,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  const id = await addItem('signatureRequests', request);
+  await addAudit({ requestId: id, action: 'draft_saved', meta: `${recipients.length} ხელმომწერი` });
+  return { id, ...request };
+}
+
+/** დრაფტის მონაცემების განახლება. ხელმომწერების token-ები თავიდან გენერირდება. */
+export async function updateSignatureDraft(requestId: string, input: CreateRequestInput): Promise<SignatureRequest> {
+  const recipients = buildRecipients(input, 'pending');
+  const fields = buildFields(input, recipients);
+  const patch = {
+    title: input.title,
+    originalUrl: input.originalUrl,
+    originalPath: input.originalPath,
+    originalHash: input.originalHash || '',
+    message: input.message,
+    expiresAt: input.expiresAt,
+    recipients,
+    fields,
+    status: 'draft' as SignRequestStatus,
+    updatedAt: nowIso(),
+  };
+  await updateItem('signatureRequests', requestId, patch);
+  await addAudit({ requestId, action: 'draft_updated', meta: `${recipients.length} ხელმომწერი` });
+  return { id: requestId, senderId: input.senderId, senderName: input.senderName, createdAt: nowIso(), ...patch };
+}
+
+/** დრაფტის გაგზავნილ სტატუსში გადაყვანა და token-ების გამოქვეყნება. */
+export async function sendSignatureRequest(requestId: string): Promise<SignatureRequest | null> {
+  const req = await getItem<SignatureRequest>('signatureRequests', requestId);
+  if (!req) return null;
+  const sentAt = nowIso();
+  const recipients = req.recipients.map((r) => ({
+    ...r,
+    status: r.status === 'signed' ? r.status : ('sent' as SignRecipientStatus),
+    sentAt: r.sentAt || sentAt,
+  }));
+  await updateItem('signatureRequests', requestId, { recipients, status: 'sent', updatedAt: sentAt });
+  await writeTokenMap(requestId, recipients);
+  await addAudit({ requestId, action: 'sent', meta: `${recipients.length} ხელმომწერი` });
+  return { ...req, recipients, status: 'sent', updatedAt: sentAt };
+}
+
+/** ხელმოწერის მოთხოვნის შექმნა + token-ების გენერაცია. აბრუნებს request-ს. */
+export async function createSignatureRequest(input: CreateRequestInput): Promise<SignatureRequest> {
+  const recipients = buildRecipients(input, 'sent');
+  const fields = buildFields(input, recipients);
 
   const request: Omit<SignatureRequest, 'id'> = {
     title: input.title,
@@ -132,14 +209,13 @@ export async function createSignatureRequest(input: CreateRequestInput): Promise
     recipients,
     fields,
     createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
 
   const id = await addItem('signatureRequests', request);
 
   // token → request რუკა (საჯარო ძებნისთვის ავტორიზაციის გარეშე)
-  await Promise.all(
-    recipients.map((r) => setItem('signTokens', r.token, { requestId: id, recipientId: r.id })),
-  );
+  await writeTokenMap(id, recipients);
 
   await addAudit({ requestId: id, action: 'created', meta: `${recipients.length} ხელმომწერი` });
 
