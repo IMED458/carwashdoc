@@ -43,20 +43,35 @@ export function subscribeCollection<T extends WithId>(
   );
 }
 
+/** Firestore არ იღებს undefined-ს — ვფილტრავთ (ღრმად). */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => stripUndefined(v)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 /** ახალი დოკუმენტის დამატება ავტო-ID-ით. აბრუნებს ახალ ID-ს. */
 export async function addItem<T extends object>(name: string, data: T): Promise<string> {
-  const ref = await addDoc(collection(db, name), data as object);
+  const ref = await addDoc(collection(db, name), stripUndefined(data) as object);
   return ref.id;
 }
 
 /** დოკუმენტის შექმნა/გადაწერა კონკრეტული ID-ით. */
 export async function setItem<T extends object>(name: string, id: string, data: T): Promise<void> {
-  await setDoc(doc(db, name, id), data as object, { merge: true });
+  await setDoc(doc(db, name, id), stripUndefined(data) as object, { merge: true });
 }
 
 /** არსებული დოკუმენტის ველების განახლება. */
 export async function updateItem(name: string, id: string, data: object): Promise<void> {
-  await updateDoc(doc(db, name, id), data);
+  await updateDoc(doc(db, name, id), stripUndefined(data) as object);
 }
 
 /** დოკუმენტის წაშლა. */
