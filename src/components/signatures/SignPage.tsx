@@ -12,11 +12,13 @@ import {
 import { fetchBytes, composeStamp, signPdf, sha256Hex } from '../../services/pdfSign';
 import { uploadBytesTo } from '../../services/storage';
 import SignatureModal from './SignatureModal';
+import PdfViewer, { PlacedField } from './PdfViewer';
 
 export default function SignPage({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{ request: SignatureRequest; recipient: SignRecipient } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [field, setField] = useState<PlacedField | null>(null);
   const [consent, setConsent] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,6 +41,8 @@ export default function SignPage({ token }: { token: string }) {
           setSignedUrl(res.request.signedUrl || null);
         } else {
           setData(res);
+          const pre = res.request.fields.find((f) => f.recipientId === res.recipient.id) || res.request.fields[0];
+          if (pre) setField({ page: pre.page, x: pre.x, y: pre.y, width: pre.width, height: pre.height });
           await markOpened(res.request.id, res.recipient.id, navigator.userAgent);
         }
       } catch (e) {
@@ -61,8 +65,7 @@ export default function SignPage({ token }: { token: string }) {
         email: data.recipient.email,
         date: new Date().toLocaleString('ka-GE'),
       });
-      const field = data.request.fields.find((f) => f.recipientId === data.recipient.id) || data.request.fields[0];
-      const signedBytes = await signPdf(original, stamp, field);
+      const signedBytes = await signPdf(original, stamp, field || undefined);
       const path = `documents/sign/${data.request.id}/signed_${Date.now()}.pdf`;
       const url = await uploadBytesTo(path, signedBytes);
       const hash = await sha256Hex(signedBytes);
@@ -113,8 +116,13 @@ export default function SignPage({ token }: { token: string }) {
       </header>
 
       <div className="flex-1 p-3 md:p-6 max-w-4xl w-full mx-auto space-y-4">
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden h-[60vh]">
-          <iframe title="დოკუმენტი" src={signedUrl || data.request.originalUrl} className="w-full h-full" />
+        <div className="bg-white rounded-xl border border-slate-200 overflow-y-auto max-h-[65vh]">
+          <PdfViewer
+            source={signedUrl || data.request.originalUrl}
+            placeable={!done}
+            field={field}
+            onField={setField}
+          />
         </div>
 
         {done ? (

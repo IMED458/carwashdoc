@@ -4,6 +4,7 @@ import { useCollection } from '../../hooks/useFirestore';
 import { uploadFileTo } from '../../services/storage';
 import { fetchBytes, sha256Hex } from '../../services/pdfSign';
 import { sendSignEmail } from '../../config/emailjs';
+import PdfViewer, { PlacedField } from './PdfViewer';
 import {
   createSignatureRequest,
   cancelRequest,
@@ -91,10 +92,21 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
 function RequestModal({ currentUser, onClose }: { currentUser: { id: string; name: string }; onClose: () => void }) {
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
+  const [field, setField] = useState<PlacedField | null>(null);
   const [rows, setRows] = useState<Row[]>([{ name: '', email: '', role: 'signer' }]);
   const [message, setMessage] = useState('გთხოვთ მოაწეროთ ხელი დოკუმენტს.');
   const [days, setDays] = useState(7);
   const [busy, setBusy] = useState(false);
+
+  const onPickFile = async (f: File | null) => {
+    setFile(f);
+    setField(null);
+    setFileBytes(null);
+    if (f && f.type === 'application/pdf') {
+      setFileBytes(new Uint8Array(await f.arrayBuffer()));
+    }
+  };
 
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const addRow = () => setRows((rs) => [...rs, { name: '', email: '', role: 'signer' }]);
@@ -127,6 +139,7 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
         message,
         expiresAt,
         recipients: valid.map((r, i) => ({ name: r.name, email: r.email, role: r.role, order: i + 1 })),
+        fields: field ? [{ page: field.page, x: field.x, y: field.y, width: field.width, height: field.height }] : [],
       });
 
       // მეილების გაგზავნა
@@ -166,9 +179,15 @@ function RequestModal({ currentUser, onClose }: { currentUser: { id: string; nam
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">PDF დოკუმენტი *</label>
-            <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)}
+            <input type="file" accept="application/pdf" onChange={(e) => onPickFile(e.target.files?.[0] || null)}
               className="w-full text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-bold" />
           </div>
+
+          {fileBytes && (
+            <div className="border border-slate-200 rounded-xl overflow-y-auto max-h-72">
+              <PdfViewer source={fileBytes} placeable field={field} onField={setField} maxWidth={460} />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">დასახელება</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="(ავტომატურად ფაილის სახელი)" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm" />
