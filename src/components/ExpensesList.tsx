@@ -541,17 +541,17 @@ export default function ExpensesList({
 
       {/* Main Expenses Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider">
-                <th className="p-4">ხარჯი</th>
-                <th className="p-4">კატეგორია & მიმწოდებელი</th>
-                <th className="p-4 text-right">თანხა დღგ-ით</th>
-                <th className="p-4 text-center">დოკუმენტების აუდიტი</th>
-                <th className="p-4 text-center">გადახდის სტატუსი</th>
-                <th className="p-4">სტატუსი</th>
-                <th className="p-4"></th>
+                <th className="p-3 w-[24%]">ხარჯი</th>
+                <th className="p-3 w-[22%]">კატეგორია & მიმწოდებელი</th>
+                <th className="p-3 w-[11%] text-right">თანხა</th>
+                <th className="p-3 w-[14%] text-center">დოკუმენტები</th>
+                <th className="p-3 w-[12%] text-center">გადახდა</th>
+                <th className="p-3 w-[10%]">სტატუსი</th>
+                <th className="p-3 w-[7%]"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -596,13 +596,12 @@ export default function ExpensesList({
 
                 return (
                   <tr key={exp.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 max-w-xs">
+                    <td className="p-3 min-w-0">
                       <div className="space-y-1">
                         <span className="font-bold text-slate-900 block truncate">{exp.title}</span>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                          <span>ID: {exp.id}</span>
-                          <span>•</span>
-                          <span>დოკ. თარიღი: {exp.invoiceDate || 'არა აქვს'}</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400 font-mono">
+                          <span className="truncate max-w-[110px]">ID: {exp.id}</span>
+                          <span>დოკ: {exp.invoiceDate || 'არა აქვს'}</span>
                         </div>
                         {hasTrancheWarning && (
                           <span className="text-[10px] text-red-500 font-semibold bg-red-50 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1">
@@ -612,41 +611,41 @@ export default function ExpensesList({
                         )}
                       </div>
                     </td>
-                    <td className="p-4">
+                    <td className="p-3 min-w-0">
                       <div className="space-y-1">
                         <span className="font-semibold text-slate-700 block truncate">{categoryName}</span>
                         <span className="text-slate-400 text-[11px] block truncate">{supplierName}</span>
                       </div>
                     </td>
-                    <td className="p-4 text-right font-bold text-slate-900">
+                    <td className="p-3 text-right font-bold text-slate-900 tabular-nums">
                       {exp.amountWithVat.toLocaleString('ka-GE', { minimumFractionDigits: 2 })} GEL
                       {exp.vat > 0 && <span className="text-[10px] text-slate-400 block font-normal">დღგ: {exp.vat.toLocaleString()} GEL</span>}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {docStatus === 'complete' ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                        <span className="inline-flex items-center justify-center gap-1 text-emerald-600 font-semibold">
                           <CheckCircle className="h-4 w-4" />
                           სრულყოფილი
                         </span>
                       ) : (
                         <div className="space-y-1">
-                          <span className="inline-flex items-center gap-1 text-amber-600 font-semibold">
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-600 font-semibold">
                             <AlertCircle className="h-4 w-4" />
-                            არასრული ({missing.length} ფაილი)
+                            <span className="leading-tight">არასრული ({missing.length})</span>
                           </span>
                         </div>
                       )}
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 text-center">
                       {paymentStatusBadge}
                     </td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${statusBadgeColor}`}>
+                    <td className="p-3">
+                      <span className={`inline-block max-w-full px-2 py-1 text-[10px] font-bold rounded-full leading-tight break-words ${statusBadgeColor}`}>
                         {STATUS_LABELS[exp.status] || exp.status}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
                         {canModify && (
                           <>
                             <button
@@ -675,8 +674,9 @@ export default function ExpensesList({
                             setActiveDetailTab('details');
                           }}
                           className="p-1.5 hover:bg-slate-100 rounded-lg text-indigo-600 font-semibold text-xs flex items-center gap-1 transition-colors"
+                          title="დეტალები"
                         >
-                          დეტალები
+                          <span className="sr-only">დეტალები</span>
                           <ArrowRight className="h-3.5 w-3.5" />
                         </button>
                       </div>

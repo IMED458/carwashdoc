@@ -18,6 +18,17 @@ import {
   AuditEntry,
   randomToken,
 } from '../../services/signatures';
+import { DocumentType, Expense, Supplier } from '../../types';
+
+const SIGN_DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: 'invoice', label: 'საგადასახადო ინვოისი / ფაქტურა' },
+  { value: 'waybill', label: 'სასაქონლო ზედნადები (RS.GE)' },
+  { value: 'tax_doc', label: 'საგადასახადო დოკუმენტი' },
+  { value: 'contract', label: 'ხელშეკრულება' },
+  { value: 'acceptance_act', label: 'მიღება-ჩაბარების აქტი' },
+  { value: 'receipt', label: 'გადარიცხვის ქვითარი' },
+  { value: 'other', label: 'სხვა ტიპის ფაილი' },
+];
 
 const REQ_STATUS: Record<SignRequestStatus, { t: string; c: string }> = {
   draft: { t: 'მონახაზი', c: 'bg-slate-100 text-slate-600' },
@@ -40,6 +51,8 @@ interface Row {
 export default function SignaturesPage({ currentUser }: { currentUser: { id: string; name: string } }) {
   const requests = useCollection<SignatureRequest>('signatureRequests');
   const audit = useCollection<AuditEntry & { id: string }>('signAudit');
+  const suppliers = useCollection<Supplier>('suppliers');
+  const expenses = useCollection<Expense>('expenses');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<SignatureRequest | null>(null);
   const [detail, setDetail] = useState<SignatureRequest | null>(null);
@@ -90,6 +103,8 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
       {modal && (
         <RequestModal
           currentUser={currentUser}
+          suppliers={suppliers}
+          expenses={expenses}
           editing={editing}
           onClose={() => {
             setModal(false);
@@ -117,14 +132,23 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
 /* ---------- NEW REQUEST ---------- */
 function RequestModal({
   currentUser,
+  suppliers,
+  expenses,
   editing,
   onClose,
 }: {
   currentUser: { id: string; name: string };
+  suppliers: Supplier[];
+  expenses: Expense[];
   editing?: SignatureRequest | null;
   onClose: () => void;
 }) {
+  const editingExpense = editing?.expenseId ? expenses.find((e) => e.id === editing.expenseId) : undefined;
   const [title, setTitle] = useState(editing?.title || '');
+  const [linkedSupplierId, setLinkedSupplierId] = useState(editingExpense?.supplierId || '');
+  const [linkedExpenseId, setLinkedExpenseId] = useState(editing?.expenseId || '');
+  const [docType, setDocType] = useState<DocumentType>(editing?.docType || 'contract');
+  const [docTypeLabel, setDocTypeLabel] = useState(editing?.docTypeLabel || '');
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [field, setField] = useState<PlacedField | null>(
@@ -162,6 +186,19 @@ function RequestModal({
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const addRow = () => setRows((rs) => [...rs, { name: '', email: '', role: 'signer' }]);
   const delRow = (i: number) => setRows((rs) => rs.filter((_, j) => j !== i));
+  const supplierExpenses = expenses.filter((e) => !linkedSupplierId || e.supplierId === linkedSupplierId);
+
+  const addSupplierRecipient = (supplierId: string) => {
+    const supplier = suppliers.find((s) => s.id === supplierId);
+    if (!supplier) return;
+    setRows((rs) => [...rs, { name: supplier.name, email: supplier.email || '', role: 'signer' }]);
+  };
+
+  const handleLinkedSupplier = (supplierId: string) => {
+    setLinkedSupplierId(supplierId);
+    const nextExpense = expenses.find((e) => e.supplierId === supplierId);
+    setLinkedExpenseId(nextExpense?.id || '');
+  };
 
   const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -198,6 +235,11 @@ function RequestModal({
         senderName: currentUser.name,
         message,
         expiresAt,
+        expenseId: linkedExpenseId,
+        docType,
+        docTypeLabel: docType === 'other'
+          ? docTypeLabel.trim()
+          : SIGN_DOCUMENT_TYPES.find((d) => d.value === docType)?.label || '',
         recipients: (mode === 'send' ? validRows : cleanRows).map((r, i) => ({ name: r.name, email: r.email, role: r.role, order: i + 1 })),
         fields: field ? [{ page: field.page, x: field.x, y: field.y, width: field.width, height: field.height }] : [],
       };
@@ -274,8 +316,78 @@ function RequestModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="(ავტომატურად ფაილის სახელი)" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm" />
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">მიმწოდებელი</label>
+              <select
+                value={linkedSupplierId}
+                onChange={(e) => handleLinkedSupplier(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+              >
+                <option value="">აირჩიეთ მიმწოდებელი</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">ხარჯზე მიბმა</label>
+              <select
+                value={linkedExpenseId}
+                onChange={(e) => setLinkedExpenseId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+              >
+                <option value="">არ გადავიტანო რეესტრში</option>
+                {supplierExpenses.map((e) => (
+                  <option key={e.id} value={e.id}>{e.title}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">დოკუმენტის ტიპი</label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value as DocumentType)}
+                className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+              >
+                {SIGN_DOCUMENT_TYPES.map((d) => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+            {docType === 'other' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">სხვა ტიპის დასახელება</label>
+                <input
+                  value={docTypeLabel}
+                  onChange={(e) => setDocTypeLabel(e.target.value)}
+                  placeholder="ჩაწერეთ დოკუმენტის ტიპი"
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-500">ხელმომწერები</label>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className="block text-xs font-bold text-slate-500">ხელმომწერები</label>
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  addSupplierRecipient(e.target.value);
+                  e.currentTarget.value = '';
+                }}
+                className="px-2 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-600"
+              >
+                <option value="">მომწოდებლიდან დამატება</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.email ? ` · ${s.email}` : ''}</option>
+                ))}
+              </select>
+            </div>
             {rows.map((r, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
                 <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="სახელი გვარი" className="col-span-4 px-2 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs" />
