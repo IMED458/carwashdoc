@@ -46,6 +46,9 @@ export interface Supplier {
   taxId: string;
   phone?: string;
   email?: string;
+  iban?: string;
+  paysIncomeTax?: boolean;
+  paysPension?: boolean;
   createdAt?: string;
 }
 

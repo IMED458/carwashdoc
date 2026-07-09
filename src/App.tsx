@@ -322,6 +322,7 @@ export default function App() {
       {activeTab === 'suppliers' && (
         <SuppliersList
           suppliers={suppliers}
+          expenses={expenses}
           canEdit={editable}
           onAdd={addSupplier}
           onUpdate={updateSupplier}
