@@ -41,7 +41,7 @@ export default function Dashboard({
   // (We sum approved payments associated with Approved expenses)
   const confirmedPaidExpenses = payments
     .filter(p => p.status === 'approved' && expenses.find(e => e.id === p.expenseId)?.status === ExpenseStatus.Approved)
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + p.amount + (p.fee || 0), 0);
 
   const confirmedRemaining = 50000 - confirmedPaidExpenses;
 
@@ -49,7 +49,7 @@ export default function Dashboard({
   // (Approved payments regardless of expense status)
   const totalPaidAmount = payments
     .filter(p => p.status === 'approved')
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + p.amount + (p.fee || 0), 0);
 
   const actualRemaining = 50000 - totalPaidAmount;
 
@@ -172,7 +172,7 @@ export default function Dashboard({
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between text-xs">
-            <span className="text-slate-400">სულ გადახდილია ბანკით</span>
+            <span className="text-slate-400">გადახდილი + საკომისიო</span>
             <span className="font-semibold text-blue-600">{totalPaidAmount.toLocaleString('ka-GE')} GEL</span>
           </div>
         </div>
@@ -221,7 +221,7 @@ export default function Dashboard({
           <div className="flex items-center gap-6 text-xs text-slate-500 pt-1">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 bg-indigo-600 rounded-full" />
-              <span>გადახდილია ({totalPaidAmount.toLocaleString()} GEL)</span>
+              <span>გადახდილი + საკომისიო ({totalPaidAmount.toLocaleString()} GEL)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 bg-amber-400 rounded-full" />

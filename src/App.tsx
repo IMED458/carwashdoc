@@ -125,7 +125,9 @@ export default function App() {
   const role = currentUser.role;
   const editable = canEdit(role);
   const totalBudget = budgetDoc.initialBudget || DEFAULT_BUDGET;
-  const totalSpent = payments.filter((p) => p.status === 'approved').reduce((s, p) => s + p.amount, 0);
+  const totalSpent = payments
+    .filter((p) => p.status === 'approved')
+    .reduce((s, p) => s + p.amount + (p.fee || 0), 0);
   const notifications: Notification[] = expenses
     .filter((e) => e.status === ExpenseStatus.DocumentsMissing || e.status === ExpenseStatus.NeedsCorrection)
     .map((e) => ({

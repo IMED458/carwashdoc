@@ -47,9 +47,9 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
           <span className="text-xl font-black text-slate-800 block mt-1">{payments.length} ტრანზაქცია</span>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">ჯამურად გადახდილი თანხა</span>
+          <span className="text-slate-400 block font-medium">ჯამურად დახარჯული თანხა</span>
           <span className="text-xl font-black text-indigo-600 block mt-1">
-            {payments.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount, 0).toLocaleString()} GEL
+            {payments.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount + (p.fee || 0), 0).toLocaleString()} GEL
           </span>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
@@ -81,7 +81,7 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
                 <th className="p-4">მიმღები პირი</th>
                 <th className="p-4">დაკავშირებული ხარჯი</th>
                 <th className="p-4">გადარიცხვის მიზანი / TXN კოდი</th>
-                <th className="p-4 text-right">გადახდილი თანხა</th>
+                <th className="p-4 text-right">გადახდილი / ხარჯი</th>
                 <th className="p-4 text-center">მეთოდი</th>
                 <th className="p-4">თარიღი</th>
                 {canEdit && <th className="p-4 text-right">მოქმედება</th>}
@@ -116,7 +116,12 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
                     </td>
                     <td className="p-4 text-right font-black text-slate-900">
                       {p.amount.toLocaleString()} GEL
-                      {p.fee > 0 && <span className="text-[9px] text-slate-400 block font-normal">საკომისიო: {p.fee} GEL</span>}
+                      {p.fee > 0 && (
+                        <>
+                          <span className="text-[9px] text-slate-400 block font-normal">საკომისიო: {p.fee} GEL</span>
+                          <span className="text-[9px] text-indigo-500 block font-bold">სულ ხარჯი: {(p.amount + p.fee).toLocaleString()} GEL</span>
+                        </>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-bold rounded uppercase">

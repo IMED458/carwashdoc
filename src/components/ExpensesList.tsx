@@ -137,7 +137,7 @@ export default function ExpensesList({
   const [recipientName, setRecipientName] = useState('');
   const [payPurpose, setPayPurpose] = useState('');
   const [payTxNumber, setPayTxNumber] = useState('');
-  const [payFee, setPayFee] = useState<number>(0.50);
+  const [payFee, setPayFee] = useState<number>(0);
   const [payReceiptFile, setPayReceiptFile] = useState('');
   const [payComment, setPayComment] = useState('');
 
@@ -387,6 +387,7 @@ export default function ExpensesList({
     setPayPurpose('');
     setPayTxNumber('');
     setPayReceiptFile('');
+    setPayFee(0);
     setPayComment('');
   };
 
@@ -1284,10 +1285,12 @@ export default function ExpensesList({
                   {(() => {
                     const expensePayments = payments.filter(p => p.expenseId === selectedExpense.id && p.status === 'approved');
                     const totalPaid = expensePayments.reduce((s, p) => s + p.amount, 0);
+                    const totalFees = expensePayments.reduce((s, p) => s + (p.fee || 0), 0);
+                    const totalOutflow = totalPaid + totalFees;
                     const remainingToPay = Math.max(0, selectedExpense.amountWithVat - totalPaid);
                     
                     return (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
                         <div>
                           <span className="text-slate-400 font-medium block">ხარჯის სრული თანხა:</span>
                           <span className="text-base font-black text-slate-800">{selectedExpense.amountWithVat.toLocaleString()} GEL</span>
@@ -1295,6 +1298,11 @@ export default function ExpensesList({
                         <div>
                           <span className="text-slate-400 font-medium block">ჯამურად გადახდილი:</span>
                           <span className="text-base font-black text-emerald-600">{totalPaid.toLocaleString()} GEL</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-medium block">საკომისიო / სულ ხარჯი:</span>
+                          <span className="text-base font-black text-indigo-600">{totalOutflow.toLocaleString()} GEL</span>
+                          <span className="text-[10px] text-slate-400 block">საკომისიო: {totalFees.toLocaleString()} GEL</span>
                         </div>
                         <div>
                           <span className="text-slate-400 font-medium block">დარჩენილი გადასახდელი:</span>
@@ -1363,7 +1371,30 @@ export default function ExpensesList({
                           />
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">საკომისიო (თუ გადაიხადეთ)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={payFee || ''}
+                            onChange={(e) => setPayFee(Number(e.target.value))}
+                            placeholder="0.00"
+                            className="w-full px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">TXN / საბანკო კოდი</label>
+                          <input
+                            type="text"
+                            value={payTxNumber}
+                            onChange={(e) => setPayTxNumber(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700"
+                          />
+                        </div>
+
+                        <div className="md:col-span-3">
                           <label className="block text-[10px] font-bold text-slate-500 mb-1">საბანკო დანიშნულება</label>
                           <input 
                             type="text" 

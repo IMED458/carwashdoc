@@ -46,11 +46,11 @@ export default function ReportsPanel({
   // Math helpers
   const totalApprovedPaid = payments
     .filter(p => p.status === 'approved' && expenses.find(e => e.id === p.expenseId)?.status === ExpenseStatus.Approved)
-    .reduce((s, p) => s + p.amount, 0);
+    .reduce((s, p) => s + p.amount + (p.fee || 0), 0);
 
   const totalSpentAll = payments
     .filter(p => p.status === 'approved')
-    .reduce((s, p) => s + p.amount, 0);
+    .reduce((s, p) => s + p.amount + (p.fee || 0), 0);
 
   const totalBudget = 50000;
 
@@ -89,7 +89,7 @@ export default function ReportsPanel({
     const rows = expenses.map((e) => {
       const category = categories.find((c) => c.id === e.categoryId)?.name || e.categoryId;
       const supplier = suppliers.find((s) => s.id === e.supplierId)?.name || e.supplierId;
-      const paid = payments.filter((p) => p.expenseId === e.id && p.status === 'approved').reduce((s, p) => s + p.amount, 0);
+      const paid = payments.filter((p) => p.expenseId === e.id && p.status === 'approved').reduce((s, p) => s + p.amount + (p.fee || 0), 0);
       return `
         <tr>
           <td>${esc(e.title)}</td>
@@ -114,7 +114,7 @@ export default function ReportsPanel({
             <thead>
               <tr>
                 <th>ხარჯი</th><th>კატეგორია</th><th>მიმწოდებელი</th><th>დოკ. ნომერი</th><th>თარიღი</th>
-                <th>დღგ-ს გარეშე</th><th>დღგ</th><th>ჯამი</th><th>გადახდილი</th><th>სტატუსი</th>
+                <th>დღგ-ს გარეშე</th><th>დღგ</th><th>ჯამი</th><th>გადახდილი + საკომისიო</th><th>სტატუსი</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -382,6 +382,8 @@ export default function ReportsPanel({
                       <th className="p-3">გადარიცხვის დანიშნულება</th>
                       <th className="p-3 font-mono">TXN / საბანკო კოდი</th>
                       <th className="p-3 text-right">გადახდილი თანხა (GEL)</th>
+                      <th className="p-3 text-right">საკომისიო (GEL)</th>
+                      <th className="p-3 text-right">სულ ხარჯი (GEL)</th>
                       <th className="p-3 text-center">მეთოდი</th>
                     </tr>
                   </thead>
@@ -393,6 +395,8 @@ export default function ReportsPanel({
                         <td className="p-3">{p.purpose}</td>
                         <td className="p-3 font-mono text-indigo-500">{p.bankTxNumber || 'N/A'}</td>
                         <td className="p-3 text-right font-bold text-emerald-600">{p.amount.toLocaleString()}</td>
+                        <td className="p-3 text-right font-bold text-slate-600">{(p.fee || 0).toLocaleString()}</td>
+                        <td className="p-3 text-right font-black text-indigo-600">{(p.amount + (p.fee || 0)).toLocaleString()}</td>
                         <td className="p-3 text-center">{PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</td>
                       </tr>
                     ))}
