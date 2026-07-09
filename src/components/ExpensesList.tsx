@@ -25,7 +25,9 @@ import {
   ArrowRight,
   Sparkles,
   Download,
-  ShieldAlert
+  ShieldAlert,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { 
   Expense, 
@@ -54,9 +56,12 @@ interface ExpensesListProps {
   currentUserRole: UserRole;
   currentUserName: string;
   onAddExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => void;
+  onUpdateExpense: (expenseId: string, expense: Partial<Expense>) => void;
+  onDeleteExpense: (expenseId: string) => void;
   onUpdateExpenseStatus: (expenseId: string, newStatus: ExpenseStatus, comment?: string) => void;
   onAddComment: (expenseId: string, text: string) => void;
   onAddDocument: (document: Omit<Document, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>) => void;
+  onDeleteDocument: (documentId: string) => void;
   onAddPayment: (payment: Omit<Payment, 'id' | 'createdAt'>) => void;
 }
 
@@ -72,9 +77,12 @@ export default function ExpensesList({
   currentUserRole,
   currentUserName,
   onAddExpense,
+  onUpdateExpense,
+  onDeleteExpense,
   onUpdateExpenseStatus,
   onAddComment,
   onAddDocument,
+  onDeleteDocument,
   onAddPayment
 }: ExpensesListProps) {
   // Search and Filter States
@@ -86,6 +94,7 @@ export default function ExpensesList({
   
   // Modals States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'details' | 'documents' | 'payments' | 'comments' | 'history'>('details');
 
@@ -93,7 +102,9 @@ export default function ExpensesList({
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [newCategoryManual, setNewCategoryManual] = useState('');
   const [newSupplier, setNewSupplier] = useState('');
+  const [newSupplierManual, setNewSupplierManual] = useState('');
   const [newTranche, setNewTranche] = useState('');
   const [newInvoiceNumber, setNewInvoiceNumber] = useState('');
   const [newInvoiceDate, setNewInvoiceDate] = useState('');
@@ -104,6 +115,9 @@ export default function ExpensesList({
   const [newStage, setNewStage] = useState('ეტაპი 1 - მოწყობა');
   const [newInternalComment, setNewInternalComment] = useState('');
   const [hasVat, setHasVat] = useState(true);
+
+  const canModify = currentUserRole !== 'viewer';
+  const isManualCategory = newCategory === '__manual__' || categories.find(c => c.id === newCategory)?.name === 'სხვა';
 
   // New Document upload Form States
   const [docType, setDocType] = useState<'invoice' | 'waybill' | 'tax_doc' | 'contract' | 'acceptance_act' | 'receipt' | 'other'>('invoice');
@@ -211,19 +225,77 @@ export default function ExpensesList({
            categoryFilter && supplierFilter && statusFilter && docFilter;
   });
 
+  const resetExpenseForm = () => {
+    setEditingExpenseId(null);
+    setNewTitle('');
+    setNewDescription('');
+    setNewCategory('');
+    setNewCategoryManual('');
+    setNewSupplier('');
+    setNewSupplierManual('');
+    setNewTranche('');
+    setNewInvoiceNumber('');
+    setNewInvoiceDate('');
+    setNewAmountNoVat(0);
+    setNewVat(0);
+    setNewAmountWithVat(0);
+    setNewResponsible(currentUserName);
+    setNewStage('ეტაპი 1 - მოწყობა');
+    setNewInternalComment('');
+    setHasVat(true);
+  };
+
+  const openAddExpenseModal = () => {
+    resetExpenseForm();
+    setIsAddModalOpen(true);
+  };
+
+  const openEditExpenseModal = (expense: Expense) => {
+    const categoryExists = categories.some(c => c.id === expense.categoryId);
+    const supplierExists = suppliers.some(s => s.id === expense.supplierId);
+    setEditingExpenseId(expense.id);
+    setNewTitle(expense.title);
+    setNewDescription(expense.description || '');
+    setNewCategory(categoryExists ? expense.categoryId : '__manual__');
+    setNewCategoryManual(categoryExists ? '' : expense.category || expense.categoryId || '');
+    setNewSupplier(supplierExists ? expense.supplierId : '__manual__');
+    setNewSupplierManual(supplierExists ? '' : expense.supplier || expense.supplierId || '');
+    setNewTranche(expense.trancheId || '');
+    setNewInvoiceNumber(expense.invoiceNumber || '');
+    setNewInvoiceDate(expense.invoiceDate || '');
+    setNewAmountNoVat(expense.amountNoVat || 0);
+    setNewVat(expense.vat || 0);
+    setNewAmountWithVat(expense.amountWithVat || 0);
+    setNewResponsible(expense.responsiblePerson || currentUserName);
+    setNewStage(expense.projectStage || 'ეტაპი 1 - მოწყობა');
+    setNewInternalComment(expense.internalComment || '');
+    setHasVat((expense.vat || 0) > 0);
+    setIsAddModalOpen(true);
+  };
+
   // Handle Form Submission
   const handleCreateExpenseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !newCategory || !newSupplier || !newAmountWithVat) {
+    const categoryValue = isManualCategory ? newCategoryManual.trim() : newCategory;
+    const supplierValue = newSupplier === '__manual__' ? newSupplierManual.trim() : newSupplier;
+    const categoryLabel = isManualCategory
+      ? newCategoryManual.trim()
+      : categories.find(c => c.id === newCategory)?.name || newCategory;
+    const supplierLabel = newSupplier === '__manual__'
+      ? newSupplierManual.trim()
+      : suppliers.find(s => s.id === newSupplier)?.name || newSupplier;
+    if (!newTitle || !categoryValue || !supplierValue || !newAmountWithVat) {
       alert('გთხოვთ შეავსოთ სავალდებულო ველები!');
       return;
     }
 
-    onAddExpense({
+    const payload = {
       title: newTitle,
       description: newDescription,
-      categoryId: newCategory,
-      supplierId: newSupplier,
+      categoryId: categoryValue,
+      category: categoryLabel,
+      supplierId: supplierValue,
+      supplier: supplierLabel,
       trancheId: newTranche || undefined,
       invoiceNumber: newInvoiceNumber || undefined,
       invoiceDate: newInvoiceDate || undefined,
@@ -233,21 +305,21 @@ export default function ExpensesList({
       responsiblePerson: newResponsible,
       projectStage: newStage,
       internalComment: newInternalComment || undefined,
-      status: ExpenseStatus.Draft
-    });
+      status: editingExpenseId
+        ? expenses.find(expense => expense.id === editingExpenseId)?.status || ExpenseStatus.Draft
+        : ExpenseStatus.Draft
+    };
 
-    // Reset Form
-    setNewTitle('');
-    setNewDescription('');
-    setNewCategory('');
-    setNewSupplier('');
-    setNewTranche('');
-    setNewInvoiceNumber('');
-    setNewInvoiceDate('');
-    setNewAmountNoVat(0);
-    setNewVat(0);
-    setNewAmountWithVat(0);
-    setNewInternalComment('');
+    if (editingExpenseId) {
+      onUpdateExpense(editingExpenseId, payload);
+      if (selectedExpense?.id === editingExpenseId) {
+        setSelectedExpense({ ...selectedExpense, ...payload });
+      }
+    } else {
+      onAddExpense(payload);
+    }
+
+    resetExpenseForm();
     setIsAddModalOpen(false);
   };
 
@@ -364,9 +436,9 @@ export default function ExpensesList({
             Excel ექსპორტი
           </button>
           
-          {currentUserRole !== 'viewer' && currentUserRole !== 'uploader' && (
+          {canModify && (
             <button 
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={openAddExpenseModal}
               className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-[1.02]"
             >
               <Plus className="h-4 w-4" />
@@ -485,6 +557,8 @@ export default function ExpensesList({
               {filteredExpenses.map(exp => {
                 const category = categories.find(c => c.id === exp.categoryId);
                 const supplier = suppliers.find(s => s.id === exp.supplierId);
+                const categoryName = category?.name || exp.category || exp.categoryId || '—';
+                const supplierName = supplier?.name || exp.supplier || exp.supplierId || '—';
                 const isIndividual = supplier?.type === 'individual';
                 
                 // Tranche check warning
@@ -539,8 +613,8 @@ export default function ExpensesList({
                     </td>
                     <td className="p-4">
                       <div className="space-y-1">
-                        <span className="font-semibold text-slate-700 block truncate">{category?.name}</span>
-                        <span className="text-slate-400 text-[11px] block truncate">{supplier?.name}</span>
+                        <span className="font-semibold text-slate-700 block truncate">{categoryName}</span>
+                        <span className="text-slate-400 text-[11px] block truncate">{supplierName}</span>
                       </div>
                     </td>
                     <td className="p-4 text-right font-bold text-slate-900">
@@ -571,16 +645,40 @@ export default function ExpensesList({
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button 
-                        onClick={() => {
-                          setSelectedExpense(exp);
-                          setActiveDetailTab('details');
-                        }}
-                        className="p-1.5 hover:bg-slate-100 rounded-lg text-indigo-600 font-semibold text-xs flex items-center gap-1 transition-colors"
-                      >
-                        დეტალები
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        {canModify && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditExpenseModal(exp)}
+                              title="რედაქტირება"
+                              className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`წავშალოთ ხარჯი „${exp.title}”?`)) onDeleteExpense(exp.id);
+                              }}
+                              title="წაშლა"
+                              className="p-1.5 hover:bg-red-50 rounded-lg text-red-600"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                        <button 
+                          onClick={() => {
+                            setSelectedExpense(exp);
+                            setActiveDetailTab('details');
+                          }}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-indigo-600 font-semibold text-xs flex items-center gap-1 transition-colors"
+                        >
+                          დეტალები
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -602,8 +700,8 @@ export default function ExpensesList({
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-100 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800">ახალი ხარჯის დამატება</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400">
+              <h3 className="text-lg font-bold text-slate-800">{editingExpenseId ? 'ხარჯის რედაქტირება' : 'ახალი ხარჯის დამატება'}</h3>
+              <button onClick={() => { setIsAddModalOpen(false); resetExpenseForm(); }} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -637,7 +735,18 @@ export default function ExpensesList({
                     {categories.map(c => (
                       <option key={c.id} value={c.id}>{c.name} {c.isAllowedGrant ? '(გრანტი)' : '(არა-გრანტი)'}</option>
                     ))}
+                    <option value="__manual__">სხვა — ხელით ჩაწერა</option>
                   </select>
+                  {isManualCategory && (
+                    <input
+                      type="text"
+                      required
+                      value={newCategoryManual}
+                      onChange={(e) => setNewCategoryManual(e.target.value)}
+                      placeholder="ჩაწერეთ ხარჯის კატეგორია"
+                      className="mt-2 w-full px-3 py-2 bg-white rounded-xl border border-indigo-200 text-xs focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
+                    />
+                  )}
                 </div>
 
                 {/* Supplier selection */}
@@ -653,7 +762,18 @@ export default function ExpensesList({
                     {suppliers.map(s => (
                       <option key={s.id} value={s.id}>{s.name} ({s.type === 'company' ? 'შპს/კომპანია' : 'ფიზ. პირი'})</option>
                     ))}
+                    <option value="__manual__">სხვა — ხელით ჩაწერა</option>
                   </select>
+                  {newSupplier === '__manual__' && (
+                    <input
+                      type="text"
+                      required
+                      value={newSupplierManual}
+                      onChange={(e) => setNewSupplierManual(e.target.value)}
+                      placeholder="ჩაწერეთ მიმწოდებელი ან შემსრულებელი"
+                      className="mt-2 w-full px-3 py-2 bg-white rounded-xl border border-indigo-200 text-xs focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
+                    />
+                  )}
                 </div>
 
                 {/* Tranche association */}
@@ -775,7 +895,7 @@ export default function ExpensesList({
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                 <button 
                   type="button" 
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { setIsAddModalOpen(false); resetExpenseForm(); }}
                   className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold rounded-xl transition-all"
                 >
                   გაუქმება
@@ -784,7 +904,7 @@ export default function ExpensesList({
                   type="submit"
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
                 >
-                  შექმნა (დრაფტად)
+                  {editingExpenseId ? 'შენახვა' : 'შექმნა დრაფტად'}
                 </button>
               </div>
             </form>
@@ -802,10 +922,10 @@ export default function ExpensesList({
               <div className="absolute inset-0 bg-grid-white/[0.02]" />
               <div className="relative z-10 space-y-1.5 max-w-xl">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full">
-                  {categories.find(c => c.id === selectedExpense.categoryId)?.name || 'კატეგორია'}
+                  {categories.find(c => c.id === selectedExpense.categoryId)?.name || selectedExpense.category || selectedExpense.categoryId || 'კატეგორია'}
                 </span>
                 <h3 className="text-lg md:text-xl font-bold tracking-tight">{selectedExpense.title}</h3>
-                <p className="text-xs text-slate-400 font-medium">მიმწოდებელი: {suppliers.find(s => s.id === selectedExpense.supplierId)?.name || 'უცნობი'}</p>
+                <p className="text-xs text-slate-400 font-medium">მიმწოდებელი: {suppliers.find(s => s.id === selectedExpense.supplierId)?.name || selectedExpense.supplier || selectedExpense.supplierId || 'უცნობი'}</p>
               </div>
               <div className="relative z-10 flex items-center gap-3">
                 <div className="text-right">
@@ -814,6 +934,31 @@ export default function ExpensesList({
                     {selectedExpense.amountWithVat.toLocaleString()} GEL
                   </span>
                 </div>
+                {canModify && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEditExpenseModal(selectedExpense)}
+                      title="რედაქტირება"
+                      className="p-1.5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`წავშალოთ ხარჯი „${selectedExpense.title}”?`)) {
+                          onDeleteExpense(selectedExpense.id);
+                          setSelectedExpense(null);
+                        }
+                      }}
+                      title="წაშლა"
+                      className="p-1.5 hover:bg-red-500/20 rounded-full text-red-200 hover:text-white transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
                 <button 
                   onClick={() => setSelectedExpense(null)} 
                   className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors"
@@ -924,70 +1069,30 @@ export default function ExpensesList({
                         }
                       })()}
 
-                      {/* Status Transition workflow engine for Accountant and Owner */}
+                      {/* Manual status control */}
                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-                        <span className="text-xs font-bold text-slate-600 block">სტატუსის მართვა (როლი: {currentUserRole})</span>
-                        
-                        <div className="flex flex-wrap gap-1.5">
-                          {/* Accountant reviewing */}
-                          {currentUserRole === 'accountant' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateExpenseStatus(selectedExpense.id, ExpenseStatus.NeedsCorrection, transitionComment)}
-                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[10px] font-bold"
-                              >
-                                დაბრუნება კორექტირებაზე
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateExpenseStatus(selectedExpense.id, ExpenseStatus.ReadyForReporting, transitionComment)}
-                                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold"
-                              >
-                                მზადაა ანგარიშგებისთვის
-                              </button>
-                            </>
-                          )}
-
-                          {/* Admin final approval */}
-                          {currentUserRole === 'admin' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateExpenseStatus(selectedExpense.id, ExpenseStatus.Approved, transitionComment)}
-                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold"
-                              >
-                                საბოლოო დამტკიცება
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateExpenseStatus(selectedExpense.id, ExpenseStatus.Rejected, transitionComment)}
-                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-[10px] font-bold"
-                              >
-                                უარყოფა
-                              </button>
-                            </>
-                          )}
-
-                          {/* Manager workflow */}
-                          {currentUserRole === 'manager' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateExpenseStatus(selectedExpense.id, ExpenseStatus.AccountantReview, transitionComment)}
-                                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold"
-                              >
-                                გაგზავნა ბუღალტერთან
-                              </button>
-                            </>
-                          )}
-                        </div>
-
+                        <span className="text-xs font-bold text-slate-600 block">სტატუსის მითითება</span>
+                        <select
+                          value={selectedExpense.status}
+                          disabled={!canModify}
+                          onChange={(e) => {
+                            const nextStatus = e.target.value as ExpenseStatus;
+                            onUpdateExpenseStatus(selectedExpense.id, nextStatus, transitionComment);
+                            setSelectedExpense({ ...selectedExpense, status: nextStatus });
+                            setTransitionComment('');
+                          }}
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700"
+                        >
+                          {Object.values(ExpenseStatus).map(status => (
+                            <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                          ))}
+                        </select>
                         <input 
                           type="text" 
-                          placeholder="კომენტარი სტატუსის ცვლილებისთვის..."
+                          placeholder="კომენტარი სტატუსის ცვლილებისთვის (არასავალდებულო)"
                           value={transitionComment}
                           onChange={(e) => setTransitionComment(e.target.value)}
+                          disabled={!canModify}
                           className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-700"
                         />
                       </div>
@@ -1030,7 +1135,7 @@ export default function ExpensesList({
                   </div>
 
                   {/* Upload document form */}
-                  {currentUserRole !== 'viewer' && (
+                  {canModify && (
                     <form onSubmit={handleUploadDocumentSubmit} className="bg-indigo-50/20 p-5 rounded-2xl border border-indigo-100/50 space-y-4">
                       <span className="text-xs font-bold text-indigo-900 block flex items-center gap-1">
                         <Upload className="h-4 w-4" />
@@ -1147,6 +1252,18 @@ export default function ExpensesList({
                           <div className="text-right">
                             <span className="font-bold text-slate-800 block">{d.amount.toLocaleString()} GEL</span>
                             <span className="text-[10px] text-slate-400 block mt-1">ატვირთა: {d.uploadedBy}</span>
+                            {canModify && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`წავშალოთ დოკუმენტი „${d.fileName}”?`)) onDeleteDocument(d.id);
+                                }}
+                                className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                წაშლა
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1190,7 +1307,7 @@ export default function ExpensesList({
                   })()}
 
                   {/* Add payment transaction form */}
-                  {currentUserRole !== 'viewer' && currentUserRole !== 'uploader' && (
+                  {canModify && (
                     <form onSubmit={handleAddPaymentSubmit} className="bg-emerald-50/20 p-5 rounded-2xl border border-emerald-100/40 space-y-4">
                       <span className="text-xs font-bold text-emerald-900 block flex items-center gap-1">
                         <Coins className="h-4 w-4" />

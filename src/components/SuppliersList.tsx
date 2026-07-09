@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Building2, User } from 'lucide-react';
+import { Plus, Trash2, Building2, User, Pencil } from 'lucide-react';
 import { Supplier, SupplierType } from '../types';
 import { SUPPLIER_TYPE_LABELS } from '../data/defaults';
 
@@ -7,6 +7,7 @@ interface Props {
   suppliers: Supplier[];
   canEdit: boolean;
   onAdd: (data: SupplierForm) => void;
+  onUpdate: (id: string, data: SupplierForm) => void;
   onDelete: (id: string) => void;
 }
 
@@ -19,8 +20,9 @@ export interface SupplierForm {
 
 const emptyForm = (): SupplierForm => ({ name: '', type: 'company', taxId: '', phone: '' });
 
-export default function SuppliersList({ suppliers, canEdit, onAdd, onDelete }: Props) {
+export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onDelete }: Props) {
   const [form, setForm] = useState<SupplierForm>(emptyForm());
+  const [editId, setEditId] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +30,10 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onDelete }: P
       alert('შეავსეთ მიმწოდებლის სახელი!');
       return;
     }
-    onAdd(form);
+    if (editId) onUpdate(editId, form);
+    else onAdd(form);
     setForm(emptyForm());
+    setEditId(null);
   };
 
   return (
@@ -85,10 +89,10 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onDelete }: P
             </div>
             <button
               type="submit"
-              title="დამატება"
+              title={editId ? 'შენახვა' : 'დამატება'}
               className="self-end p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
             >
-              <Plus className="h-4 w-4" />
+              {editId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             </button>
           </div>
         </form>
@@ -115,14 +119,27 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onDelete }: P
                 </div>
               </div>
               {canEdit && (
-                <button
-                  onClick={() => {
-                    if (confirm(`წავშალოთ მიმწოდებელი „${s.name}"?`)) onDelete(s.id);
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      setEditId(s.id);
+                      setForm({ name: s.name, type: s.type, taxId: s.taxId || '', phone: s.phone || '' });
+                    }}
+                    title="რედაქტირება"
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`წავშალოთ მიმწოდებელი „${s.name}"?`)) onDelete(s.id);
+                    }}
+                    title="წაშლა"
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               )}
             </div>
           ))

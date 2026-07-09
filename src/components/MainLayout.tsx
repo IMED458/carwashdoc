@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   LayoutDashboard,
   Receipt,
-  Users2,
   Building2,
   CreditCard,
   BarChart3,
@@ -29,7 +28,6 @@ interface MainLayoutProps {
 const MENU = [
   { id: 'dashboard', name: 'მთავარი დაფა', icon: LayoutDashboard },
   { id: 'expenses', name: 'ხარჯების რეესტრი', icon: Receipt },
-  { id: 'payroll', name: 'ხელფასები & ფიზ. პირები', icon: Users2 },
   { id: 'suppliers', name: 'მიმწოდებლები', icon: Building2 },
   { id: 'payments', name: 'გადახდების ჟურნალი', icon: CreditCard },
   { id: 'reports', name: 'ანგარიშები & ექსპორტი', icon: BarChart3 },

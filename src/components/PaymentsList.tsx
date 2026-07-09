@@ -4,17 +4,21 @@
  */
 
 import React, { useState } from 'react';
-import { CreditCard, Search, ArrowRight, CheckCircle, Clock, Hash, ShieldAlert } from 'lucide-react';
-import { Payment, Expense } from '../types';
+import { CreditCard, Search, ArrowRight, CheckCircle, Clock, Hash, ShieldAlert, Pencil, Trash2, X } from 'lucide-react';
+import { Payment, Expense, PaymentMethod } from '../types';
 import { PAYMENT_METHOD_LABELS } from '../data/defaults';
 
 interface PaymentsListProps {
   payments: Payment[];
   expenses: Expense[];
+  canEdit: boolean;
+  onUpdate: (id: string, payment: Partial<Payment>) => void;
+  onDelete: (id: string) => void;
 }
 
-export default function PaymentsList({ payments, expenses }: PaymentsListProps) {
+export default function PaymentsList({ payments, expenses, canEdit, onUpdate, onDelete }: PaymentsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [editPayment, setEditPayment] = useState<Payment | null>(null);
 
   // Filter payments
   const filteredPayments = payments.filter(p => {
@@ -80,6 +84,7 @@ export default function PaymentsList({ payments, expenses }: PaymentsListProps) 
                 <th className="p-4 text-right">გადახდილი თანხა</th>
                 <th className="p-4 text-center">მეთოდი</th>
                 <th className="p-4">თარიღი</th>
+                {canEdit && <th className="p-4 text-right">მოქმედება</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -121,18 +126,135 @@ export default function PaymentsList({ payments, expenses }: PaymentsListProps) 
                     <td className="p-4 font-mono text-slate-500">
                       {p.paymentDate}
                     </td>
+                    {canEdit && (
+                      <td className="p-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setEditPayment(p)}
+                            title="რედაქტირება"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('წავშალოთ გადახდის ჩანაწერი?')) onDelete(p.id);
+                            }}
+                            title="წაშლა"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filteredPayments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-400 font-medium">გადახდის ჩანაწერები ვერ მოიძებნა.</td>
+                  <td colSpan={canEdit ? 7 : 6} className="text-center py-10 text-slate-400 font-medium">გადახდის ჩანაწერები ვერ მოიძებნა.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {editPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onUpdate(editPayment.id, editPayment);
+              setEditPayment(null);
+            }}
+            className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-xl p-5 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-800">გადახდის რედაქტირება</h3>
+              <button type="button" onClick={() => setEditPayment(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs font-bold text-slate-500">
+                თანხა
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editPayment.amount || ''}
+                  onChange={(e) => setEditPayment({ ...editPayment, amount: Number(e.target.value) })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                თარიღი
+                <input
+                  type="date"
+                  value={editPayment.paymentDate}
+                  onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                მეთოდი
+                <select
+                  value={editPayment.paymentMethod}
+                  onChange={(e) => setEditPayment({ ...editPayment, paymentMethod: e.target.value as PaymentMethod })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                >
+                  {Object.entries(PAYMENT_METHOD_LABELS).map(([id, label]) => (
+                    <option key={id} value={id}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                მიმღები
+                <input
+                  value={editPayment.recipientName}
+                  onChange={(e) => setEditPayment({ ...editPayment, recipientName: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+              <label className="sm:col-span-2 text-xs font-bold text-slate-500">
+                გადარიცხვის მიზანი
+                <input
+                  value={editPayment.purpose}
+                  onChange={(e) => setEditPayment({ ...editPayment, purpose: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                TXN კოდი
+                <input
+                  value={editPayment.bankTxNumber || ''}
+                  onChange={(e) => setEditPayment({ ...editPayment, bankTxNumber: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                საკომისიო
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editPayment.fee || ''}
+                  onChange={(e) => setEditPayment({ ...editPayment, fee: Number(e.target.value) })}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-700"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditPayment(null)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl">
+                გაუქმება
+              </button>
+              <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl">
+                შენახვა
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
     </div>
   );

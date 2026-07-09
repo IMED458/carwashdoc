@@ -6,20 +6,15 @@ import Dashboard from './components/Dashboard';
 import ExpensesList from './components/ExpensesList';
 import SuppliersList, { SupplierForm } from './components/SuppliersList';
 import PaymentsList from './components/PaymentsList';
-import PayrollList from './components/PayrollList';
 import ReportsPanel from './components/ReportsPanel';
 import SettingsPanel from './components/SettingsPanel';
 
 import { useAuth } from './context/AuthContext';
 import { useCollection, useDocState } from './hooks/useFirestore';
 import { addItem, updateItem, deleteItem } from './services/firestore';
-import { DEFAULT_BUDGET, canEdit } from './data/defaults';
+import { DEFAULT_BUDGET, DEFAULT_EXPENSE_CATEGORIES, canEdit } from './data/defaults';
 import {
   INITIAL_BUDGET_SETTINGS,
-  INITIAL_CATEGORIES,
-  INITIAL_EXPENSES,
-  INITIAL_PAYMENTS,
-  INITIAL_SUPPLIERS,
   INITIAL_TAX_SETTINGS,
 } from './data/initialData';
 import {
@@ -39,6 +34,17 @@ import {
 
 const nowIso = () => new Date().toISOString();
 
+const normalizeStatus = (status?: string): ExpenseStatus => {
+  const legacy: Record<string, ExpenseStatus> = {
+    draft: ExpenseStatus.Draft,
+    approved: ExpenseStatus.Approved,
+    paid: ExpenseStatus.Paid,
+    rejected: ExpenseStatus.Rejected,
+  };
+  if (!status) return ExpenseStatus.Draft;
+  return legacy[status] || (Object.values(ExpenseStatus).includes(status as ExpenseStatus) ? (status as ExpenseStatus) : ExpenseStatus.Draft);
+};
+
 const normalizeExpense = (expense: Expense): Expense => ({
   ...expense,
   description: expense.description || expense.note || '',
@@ -49,7 +55,7 @@ const normalizeExpense = (expense: Expense): Expense => ({
   amountWithVat: Number(expense.amountWithVat ?? expense.amount ?? 0),
   responsiblePerson: expense.responsiblePerson || expense.createdByName || '',
   projectStage: expense.projectStage || '',
-  status: (expense.status || ExpenseStatus.Draft) as ExpenseStatus,
+  status: normalizeStatus(expense.status as unknown as string),
   createdAt: expense.createdAt || nowIso(),
   createdBy: expense.createdBy || expense.createdByName || '',
   updatedAt: expense.updatedAt || expense.createdAt || nowIso(),
@@ -88,19 +94,19 @@ export default function App() {
   const [taxSettings] = useDocState<TaxSettings>('settings', 'taxes', INITIAL_TAX_SETTINGS);
 
   const expenses = useMemo(
-    () => (expensesRaw.length ? expensesRaw : INITIAL_EXPENSES).map(normalizeExpense),
+    () => expensesRaw.map(normalizeExpense),
     [expensesRaw],
   );
   const categories = useMemo(
-    () => (categoriesRaw.length ? categoriesRaw : INITIAL_CATEGORIES),
+    () => (categoriesRaw.length ? categoriesRaw : DEFAULT_EXPENSE_CATEGORIES),
     [categoriesRaw],
   );
   const suppliers = useMemo(
-    () => (suppliersRaw.length ? suppliersRaw : INITIAL_SUPPLIERS),
+    () => suppliersRaw,
     [suppliersRaw],
   );
   const payments = useMemo(
-    () => (paymentsRaw.length ? paymentsRaw : INITIAL_PAYMENTS).map(normalizePayment),
+    () => paymentsRaw.map(normalizePayment),
     [paymentsRaw],
   );
 
@@ -157,6 +163,23 @@ export default function App() {
       updatedBy: currentUser.id,
     }).catch(fail);
 
+  const updateExpense = (expenseId: string, expense: Partial<Expense>) =>
+    updateItem('expenses', expenseId, {
+      ...expense,
+      category: expense.categoryId
+        ? categories.find((c) => c.id === expense.categoryId)?.name || expense.categoryId
+        : expense.category,
+      supplier: expense.supplierId
+        ? suppliers.find((s) => s.id === expense.supplierId)?.name || expense.supplierId
+        : expense.supplier,
+      amount: expense.amountWithVat,
+      date: expense.invoiceDate || nowIso().slice(0, 10),
+      updatedAt: nowIso(),
+      updatedBy: currentUser.id,
+    }).catch(fail);
+
+  const deleteExpense = (expenseId: string) => deleteItem('expenses', expenseId).catch(fail);
+
   const updateExpenseStatus = (expenseId: string, newStatus: ExpenseStatus, comment?: string) => {
     const expense = expenses.find((e) => e.id === expenseId);
     updateItem('expenses', expenseId, {
@@ -192,6 +215,7 @@ export default function App() {
       uploadedBy: currentUser.name,
       version: 1,
     }).catch(fail);
+  const deleteDocument = (documentId: string) => deleteItem('documents', documentId).catch(fail);
 
   const addPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) =>
     addItem('payments', {
@@ -201,8 +225,18 @@ export default function App() {
       createdAt: nowIso(),
     }).catch(fail);
 
+  const updatePayment = (paymentId: string, payment: Partial<Payment>) =>
+    updateItem('payments', paymentId, {
+      ...payment,
+      date: payment.paymentDate,
+      method: payment.paymentMethod,
+    }).catch(fail);
+
+  const deletePayment = (paymentId: string) => deleteItem('payments', paymentId).catch(fail);
+
   const addSupplier = (f: SupplierForm) =>
     addItem('suppliers', { ...f, createdAt: nowIso() }).catch(fail);
+  const updateSupplier = (id: string, f: SupplierForm) => updateItem('suppliers', id, f).catch(fail);
   const deleteSupplier = (id: string) => deleteItem('suppliers', id).catch(fail);
 
   const addPayroll = (payroll: Omit<PayrollOrIndividualService, 'id' | 'createdAt'>) =>
@@ -257,20 +291,13 @@ export default function App() {
           currentUserRole={role}
           currentUserName={currentUser.name}
           onAddExpense={addExpense}
+          onUpdateExpense={updateExpense}
+          onDeleteExpense={deleteExpense}
           onUpdateExpenseStatus={updateExpenseStatus}
           onAddComment={addComment}
           onAddDocument={addDocument}
+          onDeleteDocument={deleteDocument}
           onAddPayment={addPayment}
-        />
-      )}
-
-      {activeTab === 'payroll' && (
-        <PayrollList
-          payrollList={payrollList}
-          taxSettings={taxSettings}
-          currentUserRole={role}
-          onAddPayroll={addPayroll}
-          onUpdatePayrollStatus={updatePayrollStatus}
         />
       )}
 
@@ -279,11 +306,20 @@ export default function App() {
           suppliers={suppliers}
           canEdit={editable}
           onAdd={addSupplier}
+          onUpdate={updateSupplier}
           onDelete={deleteSupplier}
         />
       )}
 
-      {activeTab === 'payments' && <PaymentsList payments={payments} expenses={expenses} />}
+      {activeTab === 'payments' && (
+        <PaymentsList
+          payments={payments}
+          expenses={expenses}
+          canEdit={editable}
+          onUpdate={updatePayment}
+          onDelete={deletePayment}
+        />
+      )}
 
       {activeTab === 'reports' && (
         <ReportsPanel
