@@ -2,7 +2,9 @@
  * ელექტრონული ხელმოწერის სერვისი — Firestore-ზე დაფუძნებული (client-only).
  * კოლექციები: signatureRequests, signTokens (token→request), signAudit.
  */
-import { addItem, setItem, updateItem, getItem } from './firestore';
+import { addItem, setItem, updateItem, getItem, deleteItem } from './firestore';
+import { deleteField } from 'firebase/firestore';
+import { DocumentType } from '../types';
 
 export type SignRole = 'signer' | 'viewer' | 'approver';
 export type SignRecipientStatus = 'pending' | 'sent' | 'opened' | 'signed' | 'declined';
@@ -57,6 +59,9 @@ export interface SignatureRequest {
   senderName: string;
   message: string;
   expiresAt: string;
+  expenseId?: string;
+  docType?: DocumentType;
+  docTypeLabel?: string;
   recipients: SignRecipient[];
   fields: SignField[];
   createdAt: string;
@@ -98,6 +103,9 @@ export interface CreateRequestInput {
   senderName: string;
   message: string;
   expiresAt: string;
+  expenseId?: string;
+  docType?: DocumentType;
+  docTypeLabel?: string;
   recipients: { name: string; email: string; role: SignRole; order: number }[];
   fields?: Omit<SignField, 'recipientId'>[];
 }
@@ -128,6 +136,10 @@ async function writeTokenMap(requestId: string, recipients: SignRecipient[]): Pr
   );
 }
 
+async function invalidateRecipientTokens(recipients: SignRecipient[]): Promise<void> {
+  await Promise.all(recipients.map((r) => updateItem('signTokens', r.token, { used: true }).catch(() => undefined)));
+}
+
 /** ხელმოწერის მოთხოვნის დრაფტად შენახვა. */
 export async function saveSignatureDraft(input: CreateRequestInput): Promise<SignatureRequest> {
   const recipients = buildRecipients(input, 'pending');
@@ -143,6 +155,9 @@ export async function saveSignatureDraft(input: CreateRequestInput): Promise<Sig
     senderName: input.senderName,
     message: input.message,
     expiresAt: input.expiresAt,
+    expenseId: input.expenseId || '',
+    docType: input.docType || 'other',
+    docTypeLabel: input.docTypeLabel || '',
     recipients,
     fields,
     createdAt: nowIso(),
@@ -156,6 +171,8 @@ export async function saveSignatureDraft(input: CreateRequestInput): Promise<Sig
 
 /** დრაფტის მონაცემების განახლება. ხელმომწერების token-ები თავიდან გენერირდება. */
 export async function updateSignatureDraft(requestId: string, input: CreateRequestInput): Promise<SignatureRequest> {
+  const existing = await getItem<SignatureRequest>('signatureRequests', requestId);
+  if (existing) await invalidateRecipientTokens(existing.recipients);
   const recipients = buildRecipients(input, 'pending');
   const fields = buildFields(input, recipients);
   const patch = {
@@ -165,14 +182,41 @@ export async function updateSignatureDraft(requestId: string, input: CreateReque
     originalHash: input.originalHash || '',
     message: input.message,
     expiresAt: input.expiresAt,
+    expenseId: input.expenseId || '',
+    docType: input.docType || 'other',
+    docTypeLabel: input.docTypeLabel || '',
     recipients,
     fields,
     status: 'draft' as SignRequestStatus,
+    signedUrl: deleteField(),
+    signedHash: deleteField(),
     updatedAt: nowIso(),
   };
   await updateItem('signatureRequests', requestId, patch);
-  await addAudit({ requestId, action: 'draft_updated', meta: `${recipients.length} ხელმომწერი` });
-  return { id: requestId, senderId: input.senderId, senderName: input.senderName, createdAt: nowIso(), ...patch };
+  await addAudit({
+    requestId,
+    action: existing?.status === 'signed' ? 'reopened_for_signature' : 'draft_updated',
+    meta: `${recipients.length} ხელმომწერი`,
+  });
+  return {
+    id: requestId,
+    senderId: existing?.senderId || input.senderId,
+    senderName: existing?.senderName || input.senderName,
+    createdAt: existing?.createdAt || nowIso(),
+    title: patch.title,
+    originalUrl: patch.originalUrl,
+    originalPath: patch.originalPath,
+    originalHash: patch.originalHash,
+    message: patch.message,
+    expiresAt: patch.expiresAt,
+    expenseId: patch.expenseId,
+    docType: patch.docType,
+    docTypeLabel: patch.docTypeLabel,
+    recipients,
+    fields,
+    status: 'draft',
+    updatedAt: patch.updatedAt,
+  };
 }
 
 /** დრაფტის გაგზავნილ სტატუსში გადაყვანა და token-ების გამოქვეყნება. */
@@ -206,6 +250,9 @@ export async function createSignatureRequest(input: CreateRequestInput): Promise
     senderName: input.senderName,
     message: input.message,
     expiresAt: input.expiresAt,
+    expenseId: input.expenseId || '',
+    docType: input.docType || 'other',
+    docTypeLabel: input.docTypeLabel || '',
     recipients,
     fields,
     createdAt: nowIso(),
@@ -227,7 +274,7 @@ export async function getByToken(
   token: string,
 ): Promise<{ request: SignatureRequest; recipient: SignRecipient } | null> {
   const map = await getItem<{ id: string; requestId: string; recipientId: string }>('signTokens', token);
-  if (!map) return null;
+  if (!map || (map as { used?: boolean }).used) return null;
   const request = await getItem<SignatureRequest>('signatureRequests', map.requestId);
   if (!request) return null;
   const recipient = request.recipients.find((r) => r.id === map.recipientId);
@@ -284,6 +331,26 @@ export async function recordSignature(
     signedUrl: data.signedUrl,
     signedHash: data.signedHash,
   });
+  if (status === 'signed' && req.expenseId) {
+    await addItem('documents', {
+      expenseId: req.expenseId,
+      docType: req.docType || 'other',
+      docNumber: `SIGN-${requestId.slice(0, 8)}`,
+      docDate: nowIso().slice(0, 10),
+      fileName: `${req.title || 'signed-document'}.pdf`,
+      fileSize: '',
+      fileType: 'application/pdf',
+      uploadDate: nowIso(),
+      uploadedBy: 'ელექტრონული ხელმოწერა',
+      status: 'active',
+      amount: 0,
+      comment: req.docTypeLabel ? `ხელმოწერილი დოკუმენტი: ${req.docTypeLabel}` : 'ხელმოწერილი დოკუმენტი',
+      checksum: data.signedHash,
+      version: 1,
+      signatureRequestId: requestId,
+      signedUrl: data.signedUrl,
+    });
+  }
   // გამოყენებული token აღარ იმუშავებს
   const rec = req.recipients.find((r) => r.id === recipientId);
   if (rec) await updateItem('signTokens', rec.token, { used: true });
@@ -307,4 +374,11 @@ export async function cancelRequest(requestId: string): Promise<void> {
   }
   await updateItem('signatureRequests', requestId, { status: 'cancelled' });
   await addAudit({ requestId, action: 'cancelled' });
+}
+
+export async function deleteSignatureRequest(requestId: string): Promise<void> {
+  const req = await getItem<SignatureRequest>('signatureRequests', requestId);
+  if (req) await invalidateRecipientTokens(req.recipients);
+  await deleteItem('signatureRequests', requestId);
+  await addAudit({ requestId, action: 'deleted' });
 }

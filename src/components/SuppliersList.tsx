@@ -16,9 +16,10 @@ export interface SupplierForm {
   type: SupplierType;
   taxId: string;
   phone: string;
+  email: string;
 }
 
-const emptyForm = (): SupplierForm => ({ name: '', type: 'company', taxId: '', phone: '' });
+const emptyForm = (): SupplierForm => ({ name: '', type: 'company', taxId: '', phone: '', email: '' });
 
 export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onDelete }: Props) {
   const [form, setForm] = useState<SupplierForm>(emptyForm());
@@ -28,6 +29,10 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onD
     e.preventDefault();
     if (!form.name.trim()) {
       alert('შეავსეთ მიმწოდებლის სახელი!');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      alert('შეავსეთ სწორი ელფოსტა!');
       return;
     }
     if (editId) onUpdate(editId, form);
@@ -47,7 +52,7 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onD
       {canEdit && (
         <form
           onSubmit={submit}
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 grid grid-cols-1 md:grid-cols-6 gap-3 items-end"
         >
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-500 mb-1">სახელი / დასახელება *</label>
@@ -75,6 +80,16 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onD
             <input
               value={form.taxId}
               onChange={(e) => setForm({ ...form, taxId: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">ელფოსტა *</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm"
             />
           </div>
@@ -115,6 +130,7 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onD
                     {SUPPLIER_TYPE_LABELS[s.type]}
                     {s.taxId && ` · ${s.taxId}`}
                     {s.phone && ` · ${s.phone}`}
+                    {s.email && ` · ${s.email}`}
                   </span>
                 </div>
               </div>
@@ -123,7 +139,7 @@ export default function SuppliersList({ suppliers, canEdit, onAdd, onUpdate, onD
                   <button
                     onClick={() => {
                       setEditId(s.id);
-                      setForm({ name: s.name, type: s.type, taxId: s.taxId || '', phone: s.phone || '' });
+                      setForm({ name: s.name, type: s.type, taxId: s.taxId || '', phone: s.phone || '', email: s.email || '' });
                     }}
                     title="რედაქტირება"
                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
