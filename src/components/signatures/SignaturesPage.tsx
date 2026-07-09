@@ -11,6 +11,7 @@ import {
   updateSignatureDraft,
   sendSignatureRequest,
   cancelRequest,
+  deleteSignatureRequest,
   SignatureRequest,
   SignRole,
   SignRequestStatus,
@@ -105,6 +106,7 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
             setEditing(request);
             setModal(true);
           }}
+          onDelete={() => setDetail(null)}
           onClose={() => setDetail(null)}
         />
       )}
@@ -327,13 +329,17 @@ function RequestDetail({
   request,
   audit,
   onEdit,
+  onDelete,
   onClose,
 }: {
   request: SignatureRequest;
   audit: (AuditEntry & { id: string })[];
   onEdit: (request: SignatureRequest) => void;
+  onDelete: () => void;
   onClose: () => void;
 }) {
+  const [deleting, setDeleting] = useState(false);
+
   const resend = async (email: string, token: string) => {
     const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
     try {
@@ -350,6 +356,19 @@ function RequestDetail({
       alert('ხელახლა გაიგზავნა.');
     } catch (e) {
       alert('ვერ გაიგზავნა: ' + ((e as Error)?.message || ''));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('წაიშალოს ხელმოწერის მოთხოვნა და მასთან დაკავშირებული დოკუმენტი?')) return;
+    setDeleting(true);
+    try {
+      await deleteSignatureRequest(request.id);
+      onDelete();
+    } catch (e) {
+      alert('ვერ წაიშალა: ' + ((e as Error)?.message || 'შეცდომა'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -382,6 +401,14 @@ function RequestDetail({
                 <Ban className="h-3.5 w-3.5" /> გაუქმება
               </button>
             )}
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold rounded-lg"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              წაშლა
+            </button>
           </div>
 
           <div className="space-y-2">

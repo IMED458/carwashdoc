@@ -34,3 +34,16 @@ export async function uploadBytesTo(
   const blob = new Blob([bytes as unknown as BlobPart], { type: contentType });
   return upload(path, blob, contentType);
 }
+
+/** Storage საქაღალდიდან ყველა ფაილის წაშლა. */
+export async function deleteStorageFolder(prefix: string): Promise<void> {
+  const cleanPrefix = prefix.replace(/^\/+|\/+$/g, '');
+  const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).list(cleanPrefix, { limit: 1000 });
+  if (error) throw error;
+  const paths = (data || [])
+    .filter((item) => item.name)
+    .map((item) => `${cleanPrefix}/${item.name}`);
+  if (paths.length === 0) return;
+  const { error: removeError } = await supabase.storage.from(SUPABASE_BUCKET).remove(paths);
+  if (removeError) throw removeError;
+}

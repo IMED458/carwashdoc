@@ -2,9 +2,10 @@
  * ელექტრონული ხელმოწერის სერვისი — Firestore-ზე დაფუძნებული (client-only).
  * კოლექციები: signatureRequests, signTokens (token→request), signAudit.
  */
-import { addItem, setItem, updateItem, getItem, deleteItem } from './firestore';
+import { addItem, setItem, updateItem, getItem, deleteItem, getCollectionOnce } from './firestore';
 import { deleteField } from 'firebase/firestore';
-import { DocumentType } from '../types';
+import { Document, DocumentType } from '../types';
+import { deleteStorageFolder } from './storage';
 
 export type SignRole = 'signer' | 'viewer' | 'approver';
 export type SignRecipientStatus = 'pending' | 'sent' | 'opened' | 'signed' | 'declined';
@@ -378,7 +379,17 @@ export async function cancelRequest(requestId: string): Promise<void> {
 
 export async function deleteSignatureRequest(requestId: string): Promise<void> {
   const req = await getItem<SignatureRequest>('signatureRequests', requestId);
-  if (req) await invalidateRecipientTokens(req.recipients);
+  if (req) {
+    await Promise.all(req.recipients.map((r) => deleteItem('signTokens', r.token).catch(() => undefined)));
+  }
+  const docs = await getCollectionOnce<Document & { signatureRequestId?: string; signedUrl?: string }>('documents');
+  await Promise.all(
+    docs
+      .filter((d) => d.signatureRequestId === requestId || d.docNumber === `SIGN-${requestId.slice(0, 8)}`)
+      .map((d) => deleteItem('documents', d.id).catch(() => undefined)),
+  );
+  const audit = await getCollectionOnce<AuditEntry & { id: string }>('signAudit');
+  await Promise.all(audit.filter((a) => a.requestId === requestId).map((a) => deleteItem('signAudit', a.id).catch(() => undefined)));
+  await deleteStorageFolder(`documents/sign/${requestId}`).catch(() => undefined);
   await deleteItem('signatureRequests', requestId);
-  await addAudit({ requestId, action: 'deleted' });
 }
