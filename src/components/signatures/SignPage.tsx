@@ -58,8 +58,14 @@ export default function SignPage({ token }: { token: string }) {
     setModalOpen(false);
     setBusy(true);
     try {
-      const base = data.request.signedUrl || data.request.originalUrl;
-      const original = await fetchBytes(base);
+      // იმ ფაილს ვიყენებთ, რასაც ხელმომწერი ხედავს preview-ში; თუ ვერ ჩამოიტვირთა — ორიგინალზე ვბრუნდებით
+      const previewBase = signedUrl || data.request.originalUrl;
+      let original: Uint8Array;
+      try {
+        original = await fetchBytes(previewBase);
+      } catch {
+        original = await fetchBytes(data.request.originalUrl);
+      }
       const stamp = await composeStamp(sigDataUrl, {
         name: data.recipient.name,
         email: data.recipient.email,
