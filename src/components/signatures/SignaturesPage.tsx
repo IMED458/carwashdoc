@@ -472,10 +472,11 @@ function RequestDetail({
   };
 
   const handleDelete = async () => {
-    if (!confirm('წაიშალოს ხელმოწერის მოთხოვნა და მასთან დაკავშირებული დოკუმენტი?')) return;
+    if (!confirm(`ნამდვილად გსურთ „${request.title}”-ის სრულად წაშლა? წაიშლება ხელმოწერის მოთხოვნა, ხელმოწერილი PDF და ხარჯზე მიბმული დოკუმენტიც.`)) return;
     setDeleting(true);
     try {
       await deleteSignatureRequest(request.id);
+      alert('ხელმოწერის მოთხოვნა სრულად წაიშალა.');
       onDelete();
     } catch (e) {
       alert('ვერ წაიშალა: ' + ((e as Error)?.message || 'შეცდომა'));
@@ -489,7 +490,17 @@ function RequestDetail({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
           <h3 className="font-bold text-slate-800 truncate">{request.title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-60 text-red-600 text-xs font-bold rounded-lg"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              წაშლა
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+          </div>
         </div>
         <div className="p-5 space-y-5">
           <div className="flex items-center gap-2 flex-wrap">
