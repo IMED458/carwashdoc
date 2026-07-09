@@ -1,8 +1,8 @@
 /**
- * Firebase Storage — ფაილების ატვირთვა (ორიგინალი PDF, ხელმოწერილი PDF, ხელმოწერის სურათი).
+ * ფაილების ატვირთვა Supabase Storage-ზე (უფასო).
+ * ფუნქციების ხელმოწერა უცვლელია — დანარჩენი კოდი არ იცვლება.
  */
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
+import { supabase, SUPABASE_BUCKET } from '../config/supabase';
 
 export function humanFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -10,11 +10,19 @@ export function humanFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function upload(path: string, body: File | Blob, contentType: string): Promise<string> {
+  const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, body, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
 /** File ობიექტის ატვირთვა. */
 export async function uploadFileTo(path: string, file: File): Promise<string> {
-  const r = ref(storage, path);
-  await uploadBytes(r, file, { contentType: file.type || 'application/octet-stream' });
-  return getDownloadURL(r);
+  return upload(path, file, file.type || 'application/octet-stream');
 }
 
 /** bytes-ის ატვირთვა (მაგ. pdf-lib-ით შექმნილი ხელმოწერილი PDF). */
@@ -23,7 +31,6 @@ export async function uploadBytesTo(
   bytes: Uint8Array,
   contentType = 'application/pdf',
 ): Promise<string> {
-  const r = ref(storage, path);
-  await uploadBytes(r, bytes as unknown as Blob, { contentType });
-  return getDownloadURL(r);
+  const blob = new Blob([bytes as unknown as BlobPart], { type: contentType });
+  return upload(path, blob, contentType);
 }
