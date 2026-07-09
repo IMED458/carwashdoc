@@ -10,18 +10,15 @@ import {
   updateItem,
   deleteItem,
 } from './firestore';
+import { sha256Hex } from './sha256';
 import { User, UserRole } from '../types';
 
 const SESSION_KEY = 'carwashdoc.session.uid';
 const SALT = 'carwashdoc::v1';
 
-/** SHA-256 ჰეში (hex) Web Crypto-ით. */
+/** SHA-256 ჰეში (hex) — crypto.subtle ან pure-JS fallback (HTTP-ზეც მუშაობს). */
 export async function hashPassword(password: string): Promise<string> {
-  const data = new TextEncoder().encode(`${SALT}:${password}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  return sha256Hex(`${SALT}:${password}`);
 }
 
 /** პირველი გაშვებისას ვრწმუნდებით, რომ არსებობს ერთი ადმინი — გიორგი იმედაშვილი. */

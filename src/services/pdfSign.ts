@@ -4,10 +4,10 @@
  * შემდეგ ის ჩაისმება PDF-ში სურათად — pdf-lib-ის ფონტის შეზღუდვა გვერდის ავლით.
  */
 import { PDFDocument } from 'pdf-lib';
+import { sha256Hex as sha256 } from './sha256';
 
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+export function sha256Hex(bytes: Uint8Array): Promise<string> {
+  return sha256(bytes);
 }
 
 export function dataUrlToBytes(dataUrl: string): Uint8Array {
