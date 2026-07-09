@@ -13,6 +13,7 @@ import SignaturesPage from './components/signatures/SignaturesPage';
 import { useAuth } from './context/AuthContext';
 import { useCollection, useDocState } from './hooks/useFirestore';
 import { addItem, updateItem, deleteItem } from './services/firestore';
+import { uploadFileTo } from './services/storage';
 import { DEFAULT_BUDGET, DEFAULT_EXPENSE_CATEGORIES, canEdit } from './data/defaults';
 import {
   INITIAL_BUDGET_SETTINGS,
@@ -211,13 +212,27 @@ export default function App() {
       createdAt: nowIso(),
     }).catch(fail);
 
-  const addDocument = (document: Omit<GrantDocument, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>) =>
-    addItem('documents', {
-      ...document,
-      uploadDate: nowIso(),
-      uploadedBy: currentUser.name,
-      version: 1,
-    }).catch(fail);
+  const addDocument = async (
+    document: Omit<GrantDocument, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>,
+    file?: File | null,
+  ) => {
+    try {
+      let fileUrl = document.fileUrl || '';
+      if (file) {
+        const safe = file.name.replace(/[^\w.\-]+/g, '_');
+        fileUrl = await uploadFileTo(`documents/${document.expenseId}/${Date.now()}_${safe}`, file);
+      }
+      await addItem('documents', {
+        ...document,
+        fileUrl,
+        uploadDate: nowIso(),
+        uploadedBy: currentUser.name,
+        version: 1,
+      });
+    } catch (e) {
+      fail(e);
+    }
+  };
   const deleteDocument = (documentId: string) => deleteItem('documents', documentId).catch(fail);
 
   const addPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) =>

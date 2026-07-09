@@ -135,6 +135,7 @@ export interface Document {
   docNumber: string;
   docDate: string;
   fileName: string;
+  fileUrl?: string;
   fileSize: string;
   fileType?: string;
   uploadDate: string;

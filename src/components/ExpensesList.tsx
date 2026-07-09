@@ -60,7 +60,7 @@ interface ExpensesListProps {
   onDeleteExpense: (expenseId: string) => void;
   onUpdateExpenseStatus: (expenseId: string, newStatus: ExpenseStatus, comment?: string) => void;
   onAddComment: (expenseId: string, text: string) => void;
-  onAddDocument: (document: Omit<Document, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>) => void;
+  onAddDocument: (document: Omit<Document, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>, file?: File | null) => void;
   onDeleteDocument: (documentId: string) => void;
   onAddPayment: (payment: Omit<Payment, 'id' | 'createdAt'>) => void;
 }
@@ -126,6 +126,7 @@ export default function ExpensesList({
   const [docFileName, setDocFileName] = useState('');
   const [docFileSize, setDocFileSize] = useState('');
   const [docFileType, setDocFileType] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [docAmount, setDocAmount] = useState<number>(0);
   const [docComment, setDocComment] = useState('');
 
@@ -346,7 +347,7 @@ export default function ExpensesList({
       amount: docAmount || selectedExpense.amountWithVat,
       comment: docComment || undefined,
       checksum: generatedChecksum
-    });
+    }, docFile);
 
     // Reset Form
     setDocNumber('');
@@ -354,6 +355,7 @@ export default function ExpensesList({
     setDocFileName('');
     setDocFileSize('');
     setDocFileType('');
+    setDocFile(null);
     setDocAmount(0);
     setDocComment('');
   };
@@ -1193,6 +1195,7 @@ export default function ExpensesList({
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
+                              setDocFile(file);
                               setDocFileName(file.name);
                               setDocFileType(file.type || file.name.split('.').pop() || '');
                               setDocFileSize(`${Math.max(1, Math.round(file.size / 1024))} KB`);
@@ -1247,6 +1250,24 @@ export default function ExpensesList({
                                 <span>ზომა: {d.fileSize}</span>
                               </div>
                               <span className="text-[10px] text-slate-400 block font-mono mt-1">SHA-256 (Checksum): {d.checksum}</span>
+                              {d.fileUrl && (
+                                <div className="flex items-center gap-3 mt-2">
+                                  <a
+                                    href={`${d.fileUrl}${d.fileUrl.includes('?') ? '&' : '?'}download=${encodeURIComponent(d.fileName)}`}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline"
+                                  >
+                                    <Download className="h-3 w-3" /> ჩამოტვირთვა
+                                  </a>
+                                  <a
+                                    href={d.fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:underline"
+                                  >
+                                    ახალ თაბში გახსნა ↗
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
