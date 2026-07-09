@@ -20,8 +20,20 @@ export function dataUrlToBytes(dataUrl: string): Uint8Array {
 
 export async function fetchBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`ფაილი ვერ ჩამოიტვირთა (${res.status})`);
   const buf = await res.arrayBuffer();
   return new Uint8Array(buf);
+}
+
+/** %PDF- ხელმოწერის პოზიცია (ზოგ ფაილს წინ BOM/junk აქვს). */
+function findPdfStart(bytes: Uint8Array): number {
+  const max = Math.min(bytes.length - 5, 8192);
+  for (let i = 0; i <= max; i++) {
+    if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2d) {
+      return i;
+    }
+  }
+  return 0;
 }
 
 /** ხელმოწერის სურათი + წარწერა ერთ PNG-ად (canvas). */
@@ -79,7 +91,9 @@ export async function signPdf(
   stampPngDataUrl: string,
   field?: StampField,
 ): Promise<Uint8Array> {
-  const pdf = await PDFDocument.load(originalBytes);
+  const start = findPdfStart(originalBytes);
+  const clean = start > 0 ? originalBytes.subarray(start) : originalBytes;
+  const pdf = await PDFDocument.load(clean, { ignoreEncryption: true });
   const png = await pdf.embedPng(dataUrlToBytes(stampPngDataUrl));
   const pages = pdf.getPages();
   const idx = field?.page ? Math.min(Math.max(0, field.page - 1), pages.length - 1) : pages.length - 1;
