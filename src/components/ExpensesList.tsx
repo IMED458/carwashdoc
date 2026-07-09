@@ -57,6 +57,7 @@ interface ExpensesListProps {
   currentUserName: string;
   onAddExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => void;
   onUpdateExpense: (expenseId: string, expense: Partial<Expense>) => void;
+  onUpdateAudit: (expenseId: string, comment: string) => void;
   onDeleteExpense: (expenseId: string) => void;
   onUpdateExpenseStatus: (expenseId: string, newStatus: ExpenseStatus, comment?: string) => void;
   onAddComment: (expenseId: string, text: string) => void;
@@ -78,6 +79,7 @@ export default function ExpensesList({
   currentUserName,
   onAddExpense,
   onUpdateExpense,
+  onUpdateAudit,
   onDeleteExpense,
   onUpdateExpenseStatus,
   onAddComment,
@@ -1110,32 +1112,40 @@ export default function ExpensesList({
               {activeDetailTab === 'documents' && (
                 <div className="space-y-6">
                   
-                  {/* Documents checklist status */}
+                  {/* Documents audit — manual comment */}
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                    <span className="text-xs font-bold text-slate-600 block">სავალდებულო დოკუმენტების აუდიტორული შემოწმება</span>
-                    {(() => {
-                      const { status, missing } = checkDocumentCompleteness(selectedExpense);
-                      return (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="font-semibold">საერთო აუდიტი:</span>
-                            {status === 'complete' ? (
-                              <span className="text-emerald-600 font-bold">დოკუმენტები სრულად ატვირთულია</span>
-                            ) : (
-                              <span className="text-amber-600 font-bold">აკლია დოკუმენტები</span>
-                            )}
-                          </div>
-                          {missing.length > 0 && (
-                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800 space-y-1">
-                              <strong>საჭიროა შემდეგი დოკუმენტების ატვირთვა:</strong>
-                              <ul className="list-disc list-inside space-y-0.5 text-amber-700">
-                                {missing.map((m, i) => <li key={i}>{m}</li>)}
-                              </ul>
-                            </div>
-                          )}
+                    <span className="text-xs font-bold text-slate-600 block">დოკუმენტების აუდიტორული შემოწმება</span>
+                    {canModify ? (
+                      <div className="space-y-2">
+                        <textarea
+                          id="audit-note"
+                          key={selectedExpense.id}
+                          defaultValue={selectedExpense.auditComment || ''}
+                          rows={3}
+                          placeholder="ჩაწერეთ აუდიტის კომენტარი — მაგ. რა დოკუმენტები აკლია, შენიშვნები..."
+                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-700"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.getElementById('audit-note') as HTMLTextAreaElement | null;
+                              if (el) {
+                                onUpdateAudit(selectedExpense.id, el.value);
+                                alert('აუდიტის კომენტარი შენახულია!');
+                              }
+                            }}
+                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl"
+                          >
+                            შენახვა
+                          </button>
                         </div>
-                      );
-                    })()}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 whitespace-pre-wrap">
+                        {selectedExpense.auditComment || 'კომენტარი არ არის.'}
+                      </p>
+                    )}
                   </div>
 
                   {/* Upload document form */}

@@ -91,6 +91,7 @@ export interface Expense {
   responsiblePerson: string;
   projectStage: string;
   internalComment?: string;
+  auditComment?: string;
   status: ExpenseStatus;
   createdAt: string;
   createdBy: string;

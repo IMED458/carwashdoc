@@ -310,6 +310,7 @@ export default function App() {
           currentUserName={currentUser.name}
           onAddExpense={addExpense}
           onUpdateExpense={updateExpense}
+          onUpdateAudit={(id, comment) => updateItem('expenses', id, { auditComment: comment }).catch(fail)}
           onDeleteExpense={deleteExpense}
           onUpdateExpenseStatus={updateExpenseStatus}
           onAddComment={addComment}
