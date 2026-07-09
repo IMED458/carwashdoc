@@ -290,6 +290,7 @@ export default function App() {
           expenses={expenses}
           categories={categories}
           payments={payments}
+          documents={documents}
           tranches={[]}
           notifications={notifications}
           onNavigate={setActiveTab}

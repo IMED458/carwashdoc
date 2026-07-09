@@ -37,12 +37,15 @@ import {
   Tranche, 
   Payment, 
   Document, 
+  DocumentType,
   Comment, 
   StatusHistory, 
   UserRole,
   AuditLog
 } from '../types';
-import { STATUS_LABELS } from '../data/defaults';
+import { DOCUMENT_TYPE_LABELS, STATUS_LABELS } from '../data/defaults';
+
+const DOCUMENT_AUDIT_TYPES: DocumentType[] = ['invoice', 'waybill', 'tax_doc', 'contract', 'acceptance_act', 'receipt', 'other'];
 
 interface ExpensesListProps {
   expenses: Expense[];
@@ -176,29 +179,10 @@ export default function ExpensesList({
   // Check if an expense is Document Complete
   const checkDocumentCompleteness = (expense: Expense): { status: 'complete' | 'incomplete'; missing: string[] } => {
     const expenseDocs = documents.filter(d => d.expenseId === expense.id && d.status === 'active');
-    const isIndividual = suppliers.find(s => s.id === expense.supplierId)?.type === 'individual';
-    
-    const missing: string[] = [];
-
-    // For companies: requires invoice/tax_doc, contract, acceptance_act
-    if (!isIndividual) {
-      const hasInvoiceOrTaxDoc = expenseDocs.some(d => d.docType === 'invoice' || d.docType === 'tax_doc');
-      const hasContract = expenseDocs.some(d => d.docType === 'contract');
-      const hasAcceptance = expenseDocs.some(d => d.docType === 'acceptance_act');
-
-      if (!hasInvoiceOrTaxDoc) missing.push('საგადასახადო ფაქტურა/ზედნადები (RS.GE)');
-      if (!hasContract) missing.push('ხელშეკრულება');
-      if (!hasAcceptance) missing.push('მიღება-ჩაბარების აქტი');
-    } else {
-      // For individuals: contract, acceptance_act, and transfer receipt (payment receipt)
-      const hasContract = expenseDocs.some(d => d.docType === 'contract');
-      const hasAcceptance = expenseDocs.some(d => d.docType === 'acceptance_act');
-      const hasReceipt = expenseDocs.some(d => d.docType === 'receipt') || payments.some(p => p.expenseId === expense.id && p.status === 'approved');
-
-      if (!hasContract) missing.push('ხელშეკრულება');
-      if (!hasAcceptance) missing.push('მიღება-ჩაბარების აქტი');
-      if (!hasReceipt) missing.push('ბანკის გადარიცხვის ქვითარი');
-    }
+    const required = expense.requiredDocumentTypes || [];
+    const missing = required
+      .filter((docType) => !expenseDocs.some((d) => d.docType === docType))
+      .map((docType) => DOCUMENT_TYPE_LABELS[docType] || docType);
 
     return {
       status: missing.length === 0 ? 'complete' : 'incomplete',
@@ -275,6 +259,19 @@ export default function ExpensesList({
     setNewInternalComment(expense.internalComment || '');
     setHasVat((expense.vat || 0) > 0);
     setIsAddModalOpen(true);
+  };
+
+  const toggleRequiredDocument = (expense: Expense, docType: DocumentType) => {
+    const current = expense.requiredDocumentTypes || [];
+    const next = current.includes(docType)
+      ? current.filter((type) => type !== docType)
+      : [...current, docType];
+    const patch = {
+      requiredDocumentTypes: next,
+      requiredDocumentLabels: next.map((type) => DOCUMENT_TYPE_LABELS[type] || type),
+    };
+    onUpdateExpense(expense.id, patch);
+    if (selectedExpense?.id === expense.id) setSelectedExpense({ ...selectedExpense, ...patch });
   };
 
   // Handle Form Submission
@@ -595,6 +592,7 @@ export default function ExpensesList({
                 // General status layout styling
                 let statusBadgeColor = 'bg-slate-100 text-slate-700';
                 if (exp.status === ExpenseStatus.Approved) statusBadgeColor = 'bg-emerald-500 text-white';
+                else if (exp.status === ExpenseStatus.Completed) statusBadgeColor = 'bg-emerald-600 text-white';
                 else if (exp.status === ExpenseStatus.NeedsCorrection) statusBadgeColor = 'bg-red-500 text-white';
                 else if (exp.status === ExpenseStatus.AccountantReview) statusBadgeColor = 'bg-indigo-600 text-white';
                 else if (exp.status === ExpenseStatus.DocumentsMissing) statusBadgeColor = 'bg-amber-500 text-white';
@@ -1112,40 +1110,54 @@ export default function ExpensesList({
               {activeDetailTab === 'documents' && (
                 <div className="space-y-6">
                   
-                  {/* Documents audit — manual comment */}
+                  {/* Documents audit — manually selected required documents */}
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                    <span className="text-xs font-bold text-slate-600 block">დოკუმენტების აუდიტორული შემოწმება</span>
-                    {canModify ? (
-                      <div className="space-y-2">
-                        <textarea
-                          id="audit-note"
-                          key={selectedExpense.id}
-                          defaultValue={selectedExpense.auditComment || ''}
-                          rows={3}
-                          placeholder="ჩაწერეთ აუდიტის კომენტარი — მაგ. რა დოკუმენტები აკლია, შენიშვნები..."
-                          className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-700"
-                        />
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const el = document.getElementById('audit-note') as HTMLTextAreaElement | null;
-                              if (el) {
-                                onUpdateAudit(selectedExpense.id, el.value);
-                                alert('აუდიტის კომენტარი შენახულია!');
-                              }
-                            }}
-                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl"
-                          >
-                            შენახვა
-                          </button>
+                    <span className="text-xs font-bold text-slate-600 block">სავალდებულო დოკუმენტების მითითება</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {DOCUMENT_AUDIT_TYPES.map((type) => {
+                        const checked = (selectedExpense.requiredDocumentTypes || []).includes(type);
+                        return (
+                          <label key={type} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer ${checked ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!canModify}
+                              onChange={() => toggleRequiredDocument(selectedExpense, type)}
+                              className="h-3.5 w-3.5 accent-indigo-600"
+                            />
+                            {DOCUMENT_TYPE_LABELS[type]}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {(() => {
+                      const { status, missing } = checkDocumentCompleteness(selectedExpense);
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="font-semibold">საერთო აუდიტი:</span>
+                            {status === 'complete' ? (
+                              <span className="text-emerald-600 font-bold">შენ მიერ მონიშნული დოკუმენტები სრულად ატვირთულია</span>
+                            ) : (
+                              <span className="text-amber-600 font-bold">აკლია დოკუმენტები</span>
+                            )}
+                          </div>
+                          {(selectedExpense.requiredDocumentTypes || []).length === 0 && (
+                            <div className="bg-white p-3 rounded-lg border border-slate-100 text-xs text-slate-500">
+                              სავალდებულო დოკუმენტები ჯერ არ არის მონიშნული.
+                            </div>
+                          )}
+                          {missing.length > 0 && (
+                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs text-amber-800 space-y-1">
+                              <strong>საჭიროა შემდეგი დოკუმენტების ატვირთვა:</strong>
+                              <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+                                {missing.map((m, i) => <li key={i}>{m}</li>)}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-600 whitespace-pre-wrap">
-                        {selectedExpense.auditComment || 'კომენტარი არ არის.'}
-                      </p>
-                    )}
+                      );
+                    })()}
                   </div>
 
                   {/* Upload document form */}

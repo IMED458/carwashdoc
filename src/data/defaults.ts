@@ -1,7 +1,7 @@
 /**
  * კონფიგურაცია და ქართული ლეიბლები.
  */
-import { UserRole, ExpenseStatus, PaymentMethod, SupplierType } from '../types';
+import { UserRole, ExpenseStatus, PaymentMethod, SupplierType, DocumentType } from '../types';
 
 export const DEFAULT_BUDGET = 50000;
 
@@ -66,6 +66,7 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   [ExpenseStatus.NeedsCorrection]: 'საჭიროა კორექცია',
   [ExpenseStatus.ReadyForReporting]: 'მზადაა ანგარიშგებისთვის',
   [ExpenseStatus.UploadedToRS]: 'ატვირთულია RS/პორტალზე',
+  [ExpenseStatus.Completed]: 'დასრულებულია',
   [ExpenseStatus.Approved]: 'დამტკიცებული',
   [ExpenseStatus.Rejected]: 'უარყოფილი',
   [ExpenseStatus.Cancelled]: 'გაუქმებული',
@@ -85,9 +86,20 @@ export const STATUS_STYLES: Record<ExpenseStatus, string> = {
   [ExpenseStatus.NeedsCorrection]: 'bg-red-50 text-red-600',
   [ExpenseStatus.ReadyForReporting]: 'bg-teal-50 text-teal-700',
   [ExpenseStatus.UploadedToRS]: 'bg-sky-50 text-sky-700',
+  [ExpenseStatus.Completed]: 'bg-emerald-100 text-emerald-800',
   [ExpenseStatus.Approved]: 'bg-green-50 text-green-700',
   [ExpenseStatus.Rejected]: 'bg-rose-50 text-rose-700',
   [ExpenseStatus.Cancelled]: 'bg-slate-100 text-slate-500',
+};
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  invoice: 'საგადასახადო ინვოისი / ფაქტურა',
+  waybill: 'სასაქონლო ზედნადები (RS.GE)',
+  tax_doc: 'საგადასახადო დოკუმენტი',
+  contract: 'ხელშეკრულება',
+  acceptance_act: 'მიღება-ჩაბარების აქტი',
+  receipt: 'გადარიცხვის ქვითარი',
+  other: 'სხვა ტიპის ფაილი',
 };
 
 export const SUPPLIER_TYPE_LABELS: Record<SupplierType, string> = {

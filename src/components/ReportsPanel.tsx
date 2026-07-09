@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { FileText, Download, Printer, CheckCircle, AlertTriangle, Landmark, Calendar, FileCheck, Coins } from 'lucide-react';
 import { Expense, Category, Supplier, Payment, Document, PayrollOrIndividualService, Tranche, ExpenseStatus } from '../types';
-import { PAYMENT_METHOD_LABELS, STATUS_LABELS } from '../data/defaults';
+import { DOCUMENT_TYPE_LABELS, PAYMENT_METHOD_LABELS, STATUS_LABELS } from '../data/defaults';
 
 interface ReportsPanelProps {
   expenses: Expense[];
@@ -427,26 +427,9 @@ export default function ReportsPanel({
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {expenses.map(e => {
                       const expenseDocs = documents.filter(d => d.expenseId === e.id && d.status === 'active');
-                      const isIndividual = suppliers.find(s => s.id === e.supplierId)?.type === 'individual';
-                      const missing: string[] = [];
-
-                      if (!isIndividual) {
-                        const hasInvoiceOrTaxDoc = expenseDocs.some(d => d.docType === 'invoice' || d.docType === 'tax_doc');
-                        const hasContract = expenseDocs.some(d => d.docType === 'contract');
-                        const hasAcceptance = expenseDocs.some(d => d.docType === 'acceptance_act');
-
-                        if (!hasInvoiceOrTaxDoc) missing.push('საგადასახადო ფაქტურა/ზედნადები (RS.GE)');
-                        if (!hasContract) missing.push('ხელშეკრულება');
-                        if (!hasAcceptance) missing.push('მიღება-ჩაბარების აქტი');
-                      } else {
-                        const hasContract = expenseDocs.some(d => d.docType === 'contract');
-                        const hasAcceptance = expenseDocs.some(d => d.docType === 'acceptance_act');
-                        const hasReceipt = expenseDocs.some(d => d.docType === 'receipt') || payments.some(p => p.expenseId === e.id && p.status === 'approved');
-
-                        if (!hasContract) missing.push('ხელშეკრულება');
-                        if (!hasAcceptance) missing.push('მიღება-ჩაბარების აქტი');
-                        if (!hasReceipt) missing.push('ბანკის გადარიცხვის ქვითარი');
-                      }
+                      const missing = (e.requiredDocumentTypes || [])
+                        .filter((docType) => !expenseDocs.some((d) => d.docType === docType))
+                        .map((docType) => DOCUMENT_TYPE_LABELS[docType] || docType);
 
                       if (missing.length === 0) return null;
 

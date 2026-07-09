@@ -66,6 +66,7 @@ export enum ExpenseStatus {
   NeedsCorrection = 'Needs Correction',
   ReadyForReporting = 'Ready for Reporting',
   UploadedToRS = 'Uploaded to RS/Grant Portal',
+  Completed = 'Completed',
   Approved = 'Approved',
   Rejected = 'Rejected',
   Cancelled = 'Cancelled',
@@ -93,6 +94,8 @@ export interface Expense {
   internalComment?: string;
   auditComment?: string;
   status: ExpenseStatus;
+  requiredDocumentTypes?: DocumentType[];
+  requiredDocumentLabels?: string[];
   createdAt: string;
   createdBy: string;
   createdByName?: string;

@@ -16,11 +16,12 @@ import {
   HelpCircle,
   DollarSign
 } from 'lucide-react';
-import { Category, Expense, Payment, Tranche, ExpenseStatus, Notification } from '../types';
+import { Category, Document, Expense, Payment, Tranche, ExpenseStatus, Notification } from '../types';
 
 interface DashboardProps {
   expenses: Expense[];
   payments: Payment[];
+  documents: Document[];
   categories: Category[];
   tranches: Tranche[];
   notifications: Notification[];
@@ -30,6 +31,7 @@ interface DashboardProps {
 export default function Dashboard({ 
   expenses, 
   payments, 
+  documents,
   categories, 
   tranches, 
   notifications,
@@ -72,8 +74,14 @@ export default function Dashboard({
   const utilizationPercentage = Math.min(100, (totalPaidAmount / 50000) * 100);
 
   // Document status counts
-  const totalApprovedExpensesCount = expenses.filter(e => e.status === ExpenseStatus.Approved).length;
-  const missingDocsExpensesCount = expenses.filter(e => e.status === ExpenseStatus.DocumentsMissing).length;
+  const isDocumentComplete = (expense: Expense) => {
+    const required = expense.requiredDocumentTypes || [];
+    if (required.length === 0) return true;
+    const expenseDocs = documents.filter((d) => d.expenseId === expense.id && d.status === 'active');
+    return required.every((type) => expenseDocs.some((d) => d.docType === type));
+  };
+  const totalApprovedExpensesCount = expenses.filter(isDocumentComplete).length;
+  const missingDocsExpensesCount = expenses.filter((e) => !isDocumentComplete(e)).length;
 
   // Next upcoming payments (planned expenses or pending payments)
   const upcomingPayments = expenses
