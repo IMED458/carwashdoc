@@ -17,6 +17,26 @@ export interface BudgetSettings {
   currency: string;
 }
 
+export interface CostEstimateItem {
+  id: string;
+  section: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  note?: string;
+}
+
+export interface CostEstimate {
+  id: string;
+  title: string;
+  location?: string;
+  items: CostEstimateItem[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  createdByName?: string;
+}
+
 export interface Tranche {
   id: string;
   trancheNumber: number;

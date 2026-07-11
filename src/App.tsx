@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import ExpensesList from './components/ExpensesList';
 import SuppliersList, { SupplierForm } from './components/SuppliersList';
 import PaymentsList from './components/PaymentsList';
+import BudgetEstimator from './components/BudgetEstimator';
 import ReportsPanel from './components/ReportsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import SignaturesPage from './components/signatures/SignaturesPage';
@@ -22,6 +23,7 @@ import {
 import {
   Category,
   Comment,
+  CostEstimate,
   Document as GrantDocument,
   Expense,
   ExpenseStatus,
@@ -84,6 +86,7 @@ export default function App() {
   const categoriesRaw = useCollection<Category>('categories');
   const suppliersRaw = useCollection<Supplier>('suppliers');
   const paymentsRaw = useCollection<Payment>('payments');
+  const costEstimates = useCollection<CostEstimate>('costEstimates');
   const documents = useCollection<GrantDocument>('documents');
   const comments = useCollection<Comment>('comments');
   const history = useCollection<StatusHistory>('statusHistory');
@@ -275,6 +278,21 @@ export default function App() {
   const updateBudget = (amount: number) =>
     saveBudget({ ...budgetDoc, initialBudget: amount }).catch(fail);
 
+  const addCostEstimate = (estimate: Omit<CostEstimate, 'id' | 'createdAt' | 'updatedAt'>) =>
+    addItem('costEstimates', {
+      ...estimate,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      createdBy: currentUser.id,
+      createdByName: currentUser.name,
+    }).catch(fail);
+
+  const updateCostEstimate = (estimateId: string, patch: Partial<CostEstimate>) =>
+    updateItem('costEstimates', estimateId, { ...patch, updatedAt: nowIso() }).catch(fail);
+
+  const deleteCostEstimate = (estimateId: string) =>
+    deleteItem('costEstimates', estimateId).catch(fail);
+
   return (
     <MainLayout
       activeTab={activeTab}
@@ -339,6 +357,17 @@ export default function App() {
           canEdit={editable}
           onUpdate={updatePayment}
           onDelete={deletePayment}
+        />
+      )}
+
+      {activeTab === 'estimator' && (
+        <BudgetEstimator
+          estimates={costEstimates}
+          currentUserName={currentUser.name}
+          canEdit={editable}
+          onAdd={addCostEstimate}
+          onUpdate={updateCostEstimate}
+          onDelete={deleteCostEstimate}
         />
       )}
 
