@@ -19,6 +19,7 @@ export interface SupplierForm {
   phone: string;
   email: string;
   iban: string;
+  paysVat: boolean;
   paysIncomeTax: boolean;
   paysPension: boolean;
 }
@@ -30,6 +31,7 @@ const emptyForm = (): SupplierForm => ({
   phone: '',
   email: '',
   iban: '',
+  paysVat: false,
   paysIncomeTax: false,
   paysPension: false,
 });
@@ -81,6 +83,7 @@ export default function SuppliersList({ suppliers, expenses, canEdit, onAdd, onU
       phone: s.phone || '',
       email: s.email || '',
       iban: s.iban || '',
+      paysVat: !!s.paysVat,
       paysIncomeTax: !!s.paysIncomeTax,
       paysPension: !!s.paysPension,
     });
@@ -153,6 +156,10 @@ export default function SuppliersList({ suppliers, expenses, canEdit, onAdd, onU
           </div>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.paysVat} onChange={(e) => setForm({ ...form, paysVat: e.target.checked })} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+              <span className="text-sm text-slate-700 font-semibold">დღგ-ს გადამხდელი</span>
+            </label>
             <label className="inline-flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.paysIncomeTax} onChange={(e) => setForm({ ...form, paysIncomeTax: e.target.checked })} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-sm text-slate-700 font-semibold">იხდის საშემოსავლოს</span>
@@ -236,6 +243,9 @@ export default function SuppliersList({ suppliers, expenses, canEdit, onAdd, onU
 
                 {/* tax flags */}
                 <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-3">
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.paysVat ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    დღგ: {s.paysVat ? 'იხდის ✓' : 'არ იხდის ✗'}
+                  </span>
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${s.paysIncomeTax ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                     საშემოსავლო: {s.paysIncomeTax ? 'იხდის ✓' : 'არ იხდის ✗'}
                   </span>

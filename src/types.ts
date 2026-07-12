@@ -67,6 +67,7 @@ export interface Supplier {
   phone?: string;
   email?: string;
   iban?: string;
+  paysVat?: boolean;
   paysIncomeTax?: boolean;
   paysPension?: boolean;
   createdAt?: string;
