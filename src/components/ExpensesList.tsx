@@ -67,6 +67,8 @@ interface ExpensesListProps {
   onAddDocument: (document: Omit<Document, 'id' | 'uploadDate' | 'uploadedBy' | 'version'>, file?: File | null) => void;
   onDeleteDocument: (documentId: string) => void;
   onAddPayment: (payment: Omit<Payment, 'id' | 'createdAt'>) => void;
+  onUpdatePayment: (paymentId: string, payment: Partial<Payment>) => void;
+  onDeletePayment: (paymentId: string) => void;
 }
 
 export default function ExpensesList({
@@ -88,7 +90,9 @@ export default function ExpensesList({
   onAddComment,
   onAddDocument,
   onDeleteDocument,
-  onAddPayment
+  onAddPayment,
+  onUpdatePayment,
+  onDeletePayment
 }: ExpensesListProps) {
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,6 +151,7 @@ export default function ExpensesList({
   const [payFee, setPayFee] = useState<number>(0);
   const [payReceiptFile, setPayReceiptFile] = useState('');
   const [payComment, setPayComment] = useState('');
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
 
   // Status transition state
   const [transitionComment, setTransitionComment] = useState('');
@@ -368,7 +373,7 @@ export default function ExpensesList({
       return;
     }
 
-    onAddPayment({
+    const payload = {
       expenseId: selectedExpense.id,
       amount: Number(payAmount),
       paymentDate: payDate,
@@ -380,10 +385,16 @@ export default function ExpensesList({
       fee: Number(payFee),
       receiptFile: payReceiptFile || undefined,
       comment: payComment || undefined,
-      status: 'approved' // Automatically approved for simplicity of the simulation
-    });
+      status: 'approved' as const,
+    };
+    if (editingPaymentId) {
+      onUpdatePayment(editingPaymentId, payload);
+    } else {
+      onAddPayment(payload);
+    }
 
     // Reset form
+    setEditingPaymentId(null);
     setPayAmount(0);
     setPayDate('');
     setPayPurpose('');
@@ -391,6 +402,19 @@ export default function ExpensesList({
     setPayReceiptFile('');
     setPayFee(0);
     setPayComment('');
+  };
+
+  // გადახდის რედაქტირებაზე ჩატვირთვა
+  const startEditPayment = (p: Payment) => {
+    setEditingPaymentId(p.id);
+    setPayAmount(p.amount);
+    setPayDate(p.paymentDate);
+    setPayMethod(p.paymentMethod);
+    setRecipientName(p.recipientName || '');
+    setPayPurpose(p.purpose || '');
+    setPayTxNumber(p.bankTxNumber || '');
+    setPayFee(p.fee || 0);
+    setPayComment(p.comment || '');
   };
 
   // Export Filtered Table to CSV simulation
@@ -622,7 +646,6 @@ export default function ExpensesList({
                     </td>
                     <td className="p-3 text-right font-bold text-slate-900 tabular-nums">
                       {exp.amountWithVat.toLocaleString('ka-GE', { minimumFractionDigits: 2 })} GEL
-                      {exp.vat > 0 && <span className="text-[10px] text-slate-400 block font-normal">დღგ: {exp.vat.toLocaleString()} GEL</span>}
                     </td>
                     <td className="p-3 text-center">
                       {docStatus === 'complete' ? (
@@ -1488,12 +1511,25 @@ export default function ExpensesList({
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-2">
-                        <button 
+                      <div className="flex justify-end gap-2 pt-2">
+                        {editingPaymentId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPaymentId(null);
+                              setPayAmount(0); setPayDate(''); setPayPurpose(''); setPayTxNumber('');
+                              setPayReceiptFile(''); setPayFee(0); setPayComment('');
+                            }}
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl"
+                          >
+                            გაუქმება
+                          </button>
+                        )}
+                        <button
                           type="submit"
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all"
                         >
-                          გადახდის რეგისტრაცია
+                          {editingPaymentId ? 'გადახდის განახლება' : 'გადახდის რეგისტრაცია'}
                         </button>
                       </div>
                     </form>
@@ -1520,6 +1556,24 @@ export default function ExpensesList({
                           <div className="text-right space-y-1">
                             <span className="text-sm font-black text-emerald-600">{p.amount.toLocaleString()} GEL</span>
                             <span className="text-[10px] text-slate-400 block">შემოწმებული: {p.checkedBy || 'ბუღალტერი'}</span>
+                            {canModify && (
+                              <div className="flex items-center gap-1 justify-end pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditPayment(p)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-600 border border-slate-200 rounded-lg text-[10px] font-bold"
+                                >
+                                  <Pencil className="h-3 w-3" /> რედაქტ.
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (confirm('წავშალოთ ეს გადახდა?')) onDeletePayment(p.id); }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-red-50 text-red-600 border border-slate-200 rounded-lg text-[10px] font-bold"
+                                >
+                                  <Trash2 className="h-3 w-3" /> წაშლა
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}

@@ -336,6 +336,8 @@ export default function App() {
           onAddDocument={addDocument}
           onDeleteDocument={deleteDocument}
           onAddPayment={addPayment}
+          onUpdatePayment={updatePayment}
+          onDeletePayment={deletePayment}
         />
       )}
 
