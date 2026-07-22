@@ -139,6 +139,8 @@ export interface Payment {
   purpose: string;
   bankTxNumber?: string;
   fee: number;
+  pensionAmount?: number;
+  incomeTaxAmount?: number;
   receiptFile?: string;
   note?: string;
   comment?: string;

@@ -64,11 +64,11 @@ export default function SettingsPanel({
 
   const addCat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!catName.trim() || !catBudget) {
-      alert('შეავსეთ კატეგორიის სახელი და ბიუჯეტი!');
+    if (!catName.trim()) {
+      alert('შეავსეთ კატეგორიის სახელი!');
       return;
     }
-    onAddCategory(catName.trim(), Number(catBudget));
+    onAddCategory(catName.trim(), Number(catBudget) || 0);
     setCatName('');
     setCatBudget(0);
   };
@@ -223,8 +223,8 @@ export default function SettingsPanel({
               <input value={catName} onChange={(e) => setCatName(e.target.value)} placeholder="მაგ: ბეტონი" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm" />
             </div>
             <div className="w-28">
-              <label className="block text-[11px] font-bold text-slate-500 mb-1">ბიუჯეტი</label>
-              <input type="number" value={catBudget || ''} onChange={(e) => setCatBudget(Number(e.target.value))} className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold" />
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">ბიუჯეტი (არასავალდ.)</label>
+              <input type="number" value={catBudget || ''} onChange={(e) => setCatBudget(Number(e.target.value))} placeholder="—" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold" />
             </div>
             <button type="submit" className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl">
               <FolderPlus className="h-4 w-4" />
@@ -236,7 +236,7 @@ export default function SettingsPanel({
               <div key={c.id} className="flex items-center justify-between py-2">
                 <span className="text-sm font-semibold text-slate-700">{c.name}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">{gel(c.plannedBudget)}</span>
+                  <span className="text-xs font-bold text-slate-400">{c.plannedBudget ? gel(c.plannedBudget) : '—'}</span>
                   <button onClick={() => confirm(`წავშალოთ „${c.name}"?`) && onDeleteCategory(c.id)} className="p-1 text-slate-400 hover:text-red-600 rounded">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

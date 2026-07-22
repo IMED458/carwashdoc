@@ -149,6 +149,8 @@ export default function ExpensesList({
   const [payPurpose, setPayPurpose] = useState('');
   const [payTxNumber, setPayTxNumber] = useState('');
   const [payFee, setPayFee] = useState<number>(0);
+  const [payPension, setPayPension] = useState<number>(0);
+  const [payIncomeTax, setPayIncomeTax] = useState<number>(0);
   const [payReceiptFile, setPayReceiptFile] = useState('');
   const [payComment, setPayComment] = useState('');
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -383,6 +385,8 @@ export default function ExpensesList({
       purpose: payPurpose,
       bankTxNumber: payTxNumber || undefined,
       fee: Number(payFee),
+      pensionAmount: Number(payPension) || 0,
+      incomeTaxAmount: Number(payIncomeTax) || 0,
       receiptFile: payReceiptFile || undefined,
       comment: payComment || undefined,
       status: 'approved' as const,
@@ -401,6 +405,8 @@ export default function ExpensesList({
     setPayTxNumber('');
     setPayReceiptFile('');
     setPayFee(0);
+    setPayPension(0);
+    setPayIncomeTax(0);
     setPayComment('');
   };
 
@@ -414,6 +420,8 @@ export default function ExpensesList({
     setPayPurpose(p.purpose || '');
     setPayTxNumber(p.bankTxNumber || '');
     setPayFee(p.fee || 0);
+    setPayPension(p.pensionAmount || 0);
+    setPayIncomeTax(p.incomeTaxAmount || 0);
     setPayComment(p.comment || '');
   };
 
@@ -1477,13 +1485,39 @@ export default function ExpensesList({
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 mb-1">საკომისიო (თუ გადაიხადეთ)</label>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">ბანკის საკომისიო (₾)</label>
                           <input
                             type="number"
                             step="0.01"
                             min="0"
                             value={payFee || ''}
                             onChange={(e) => setPayFee(Number(e.target.value))}
+                            placeholder="0.00"
+                            className="w-full px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">საპენსიო (₾) — არასავალდებ.</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={payPension || ''}
+                            onChange={(e) => setPayPension(Number(e.target.value))}
+                            placeholder="0.00"
+                            className="w-full px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">საშემოსავლო (₾) — არასავალდებ.</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={payIncomeTax || ''}
+                            onChange={(e) => setPayIncomeTax(Number(e.target.value))}
                             placeholder="0.00"
                             className="w-full px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 font-bold"
                           />
@@ -1518,7 +1552,7 @@ export default function ExpensesList({
                             onClick={() => {
                               setEditingPaymentId(null);
                               setPayAmount(0); setPayDate(''); setPayPurpose(''); setPayTxNumber('');
-                              setPayReceiptFile(''); setPayFee(0); setPayComment('');
+                              setPayReceiptFile(''); setPayFee(0); setPayPension(0); setPayIncomeTax(0); setPayComment('');
                             }}
                             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl"
                           >
@@ -1550,6 +1584,8 @@ export default function ExpensesList({
                               <span>მეთოდი: <strong className="text-slate-500">{p.paymentMethod === 'bank' ? 'საბანკო' : p.paymentMethod === 'cash' ? 'ნაღდი' : p.paymentMethod === 'pos' ? 'POS' : p.paymentMethod}</strong></span>
                               <span>•</span>
                               <span>საკომისიო: {p.fee} GEL</span>
+                              {!!p.pensionAmount && (<><span>•</span><span>საპენსიო: {p.pensionAmount} GEL</span></>)}
+                              {!!p.incomeTaxAmount && (<><span>•</span><span>საშემოსავლო: {p.incomeTaxAmount} GEL</span></>)}
                             </div>
                           </div>
 
