@@ -20,6 +20,7 @@ import {
   randomToken,
 } from '../../services/signatures';
 import { DocumentType, Expense, Supplier } from '../../types';
+import { DOCUMENT_TYPE_LABELS } from '../../data/defaults';
 
 const SIGN_DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: 'invoice', label: 'საგადასახადო ინვოისი / ფაქტურა' },
@@ -458,12 +459,13 @@ function RequestDetail({
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachSearch, setAttachSearch] = useState('');
   const [attachBusy, setAttachBusy] = useState(false);
+  const [attachDocType, setAttachDocType] = useState<DocumentType>((request.docType as DocumentType) || 'other');
   const linkedExpense = request.expenseId ? expenses.find((e) => e.id === request.expenseId) : undefined;
 
   const doAttach = async (expenseId: string) => {
     setAttachBusy(true);
     try {
-      await attachSignedToExpense(request.id, expenseId, request.docType, request.docTypeLabel);
+      await attachSignedToExpense(request.id, expenseId, attachDocType, DOCUMENT_TYPE_LABELS[attachDocType]);
       setAttachOpen(false);
       setAttachSearch('');
       alert('ხელმოწერილი დოკუმენტი მიება ხარჯს (ხელმომწერთან ხელახლა არ გაგზავნილა).');
@@ -585,6 +587,18 @@ function RequestDetail({
               <span className="text-xs font-bold text-slate-600 block">
                 {linkedExpense ? 'აირჩიეთ ახალი ხარჯი — დოკუმენტი ძველიდან მოიხსნება' : 'აირჩიეთ ხარჯი, რომელსაც მიება ხელმოწერილი დოკუმენტი'}
               </span>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">დოკუმენტის ტიპი (რომ სწორად ჩაითვალოს რა აკლია)</label>
+                <select
+                  value={attachDocType}
+                  onChange={(e) => setAttachDocType(e.target.value as DocumentType)}
+                  className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs"
+                >
+                  {(Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[]).map((t) => (
+                    <option key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
               <input
                 value={attachSearch}
                 onChange={(e) => setAttachSearch(e.target.value)}
