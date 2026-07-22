@@ -557,9 +557,17 @@ function RequestDetail({
 
             {request.signedUrl && (
               linkedExpense ? (
-                <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg">
-                  <Paperclip className="h-3.5 w-3.5" /> მიბმულია: {linkedExpense.title}
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg">
+                    <Paperclip className="h-3.5 w-3.5" /> მიბმულია: {linkedExpense.title}
+                  </span>
+                  <button
+                    onClick={() => setAttachOpen((o) => !o)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-lg"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> სხვა ხარჯზე გადატანა
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={() => setAttachOpen((o) => !o)}
@@ -571,10 +579,12 @@ function RequestDetail({
             )}
           </div>
 
-          {/* Attach signed doc to an expense (no re-send) */}
-          {request.signedUrl && !linkedExpense && attachOpen && (
+          {/* Attach / move signed doc to an expense (no re-send) */}
+          {request.signedUrl && attachOpen && (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
-              <span className="text-xs font-bold text-slate-600 block">აირჩიეთ ხარჯი, რომელსაც მიება ხელმოწერილი დოკუმენტი</span>
+              <span className="text-xs font-bold text-slate-600 block">
+                {linkedExpense ? 'აირჩიეთ ახალი ხარჯი — დოკუმენტი ძველიდან მოიხსნება' : 'აირჩიეთ ხარჯი, რომელსაც მიება ხელმოწერილი დოკუმენტი'}
+              </span>
               <input
                 value={attachSearch}
                 onChange={(e) => setAttachSearch(e.target.value)}

@@ -388,6 +388,10 @@ export async function attachSignedToExpense(
   if (!req || !req.signedUrl) throw new Error('ხელმოწერილი დოკუმენტი ვერ მოიძებნა');
 
   const docs = await getCollectionOnce<Document & { signatureRequestId?: string }>('documents');
+  // სხვა ხარჯზე გადატანისას — ძველი მიბმული დოკუმენტ(ებ)ის მოშლა
+  const priorDocs = docs.filter((d) => d.signatureRequestId === requestId && d.expenseId !== expenseId);
+  await Promise.all(priorDocs.map((d) => deleteItem('documents', d.id).catch(() => undefined)));
+
   const exists = docs.some((d) => d.signatureRequestId === requestId && d.expenseId === expenseId);
   if (!exists) {
     await addItem('documents', {
