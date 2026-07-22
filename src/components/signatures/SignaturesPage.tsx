@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PenTool, Plus, X, Upload, Trash2, Download, Send, Loader2, Ban, RefreshCw, FileSignature } from 'lucide-react';
+import { PenTool, Plus, X, Upload, Trash2, Download, Send, Loader2, Ban, RefreshCw, FileSignature, Paperclip } from 'lucide-react';
 import { useCollection } from '../../hooks/useFirestore';
 import { uploadFileTo } from '../../services/storage';
 import { fetchBytes, sha256Hex } from '../../services/pdfSign';
@@ -12,6 +12,7 @@ import {
   sendSignatureRequest,
   cancelRequest,
   deleteSignatureRequest,
+  attachSignedToExpense,
   SignatureRequest,
   SignRole,
   SignRequestStatus,
@@ -115,6 +116,7 @@ export default function SignaturesPage({ currentUser }: { currentUser: { id: str
       {detailReq && (
         <RequestDetail
           request={detailReq}
+          expenses={expenses}
           audit={audit.filter((a) => a.requestId === detailReq.id)}
           onEdit={(request) => {
             setDetail(null);
@@ -439,18 +441,38 @@ function RequestModal({
 /* ---------- DETAIL ---------- */
 function RequestDetail({
   request,
+  expenses,
   audit,
   onEdit,
   onDelete,
   onClose,
 }: {
   request: SignatureRequest;
+  expenses: Expense[];
   audit: (AuditEntry & { id: string })[];
   onEdit: (request: SignatureRequest) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachSearch, setAttachSearch] = useState('');
+  const [attachBusy, setAttachBusy] = useState(false);
+  const linkedExpense = request.expenseId ? expenses.find((e) => e.id === request.expenseId) : undefined;
+
+  const doAttach = async (expenseId: string) => {
+    setAttachBusy(true);
+    try {
+      await attachSignedToExpense(request.id, expenseId, request.docType, request.docTypeLabel);
+      setAttachOpen(false);
+      setAttachSearch('');
+      alert('ხელმოწერილი დოკუმენტი მიება ხარჯს (ხელმომწერთან ხელახლა არ გაგზავნილა).');
+    } catch (e) {
+      alert('ვერ მიება: ' + ((e as Error)?.message || 'შეცდომა'));
+    } finally {
+      setAttachBusy(false);
+    }
+  };
 
   const resend = async (email: string, token: string) => {
     const base = `${window.location.origin}${import.meta.env.BASE_URL}#/sign/`;
@@ -532,7 +554,54 @@ function RequestDetail({
               {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               წაშლა
             </button>
+
+            {request.signedUrl && (
+              linkedExpense ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg">
+                  <Paperclip className="h-3.5 w-3.5" /> მიბმულია: {linkedExpense.title}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setAttachOpen((o) => !o)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-lg"
+                >
+                  <Paperclip className="h-3.5 w-3.5" /> ხარჯზე მიბმა
+                </button>
+              )
+            )}
           </div>
+
+          {/* Attach signed doc to an expense (no re-send) */}
+          {request.signedUrl && !linkedExpense && attachOpen && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+              <span className="text-xs font-bold text-slate-600 block">აირჩიეთ ხარჯი, რომელსაც მიება ხელმოწერილი დოკუმენტი</span>
+              <input
+                value={attachSearch}
+                onChange={(e) => setAttachSearch(e.target.value)}
+                placeholder="ძებნა ხარჯის დასახელებით..."
+                className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs"
+              />
+              <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-lg bg-white">
+                {expenses
+                  .filter((e) => e.title.toLowerCase().includes(attachSearch.toLowerCase()))
+                  .slice(0, 50)
+                  .map((e) => (
+                    <button
+                      key={e.id}
+                      disabled={attachBusy}
+                      onClick={() => doAttach(e.id)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 disabled:opacity-60 flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate font-semibold text-slate-700">{e.title}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">{(e.amountWithVat ?? e.amount ?? 0).toLocaleString()} ₾</span>
+                    </button>
+                  ))}
+                {expenses.filter((e) => e.title.toLowerCase().includes(attachSearch.toLowerCase())).length === 0 && (
+                  <div className="px-3 py-3 text-[11px] text-slate-400 text-center">ხარჯი ვერ მოიძებნა.</div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <span className="text-xs font-bold text-slate-500">ხელმომწერები</span>

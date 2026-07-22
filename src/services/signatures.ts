@@ -377,6 +377,46 @@ export async function cancelRequest(requestId: string): Promise<void> {
   await addAudit({ requestId, action: 'cancelled' });
 }
 
+/** უკვე ხელმოწერილი დოკუმენტის ხარჯზე მიბმა — ხელმომწერთან ხელახლა გაგზავნის გარეშე. */
+export async function attachSignedToExpense(
+  requestId: string,
+  expenseId: string,
+  docType?: DocumentType,
+  docTypeLabel?: string,
+): Promise<void> {
+  const req = await getItem<SignatureRequest>('signatureRequests', requestId);
+  if (!req || !req.signedUrl) throw new Error('ხელმოწერილი დოკუმენტი ვერ მოიძებნა');
+
+  const docs = await getCollectionOnce<Document & { signatureRequestId?: string }>('documents');
+  const exists = docs.some((d) => d.signatureRequestId === requestId && d.expenseId === expenseId);
+  if (!exists) {
+    await addItem('documents', {
+      expenseId,
+      docType: docType || req.docType || 'other',
+      docNumber: `SIGN-${requestId.slice(0, 8)}`,
+      docDate: nowIso().slice(0, 10),
+      fileName: `${req.title || 'signed-document'}.pdf`,
+      fileUrl: req.signedUrl,
+      fileSize: '',
+      fileType: 'application/pdf',
+      uploadDate: nowIso(),
+      uploadedBy: 'ელექტრონული ხელმოწერა',
+      status: 'active',
+      amount: 0,
+      comment:
+        docTypeLabel || req.docTypeLabel
+          ? `ხელმოწერილი დოკუმენტი: ${docTypeLabel || req.docTypeLabel}`
+          : 'ხელმოწერილი დოკუმენტი',
+      checksum: req.signedHash || '',
+      version: 1,
+      signatureRequestId: requestId,
+      signedUrl: req.signedUrl,
+    });
+  }
+  await updateItem('signatureRequests', requestId, { expenseId, updatedAt: nowIso() });
+  await addAudit({ requestId, action: 'attached_to_expense', meta: expenseId });
+}
+
 export async function deleteSignatureRequest(requestId: string): Promise<void> {
   const req = await getItem<SignatureRequest>('signatureRequests', requestId);
   if (req) {
