@@ -14,7 +14,7 @@ import SignaturesPage from './components/signatures/SignaturesPage';
 import { useAuth } from './context/AuthContext';
 import { useCollection, useDocState } from './hooks/useFirestore';
 import { addItem, updateItem, deleteItem } from './services/firestore';
-import { uploadFileTo } from './services/storage';
+import { uploadFileTo, deleteStorageFolder } from './services/storage';
 import { DEFAULT_BUDGET, DEFAULT_EXPENSE_CATEGORIES, canEdit } from './data/defaults';
 import {
   INITIAL_BUDGET_SETTINGS,
@@ -185,7 +185,30 @@ export default function App() {
       updatedBy: currentUser.id,
     }).catch(fail);
 
-  const deleteExpense = (expenseId: string) => deleteItem('expenses', expenseId).catch(fail);
+  const deleteExpense = async (expenseId: string) => {
+    try {
+      // Cascade delete: remove all records tied to this expense so totals
+      // (spent / remaining) recompute correctly and no orphans are left behind.
+      const relatedPayments = payments.filter((p) => p.expenseId === expenseId);
+      const relatedDocs = documents.filter((d) => d.expenseId === expenseId);
+      const relatedComments = comments.filter((c) => c.expenseId === expenseId);
+      const relatedHistory = history.filter((h) => h.expenseId === expenseId);
+
+      await Promise.all([
+        ...relatedPayments.map((p) => deleteItem('payments', p.id)),
+        ...relatedDocs.map((d) => deleteItem('documents', d.id)),
+        ...relatedComments.map((c) => deleteItem('comments', c.id)),
+        ...relatedHistory.map((h) => deleteItem('statusHistory', h.id)),
+      ]);
+
+      // Best-effort removal of the expense's uploaded files from storage.
+      await deleteStorageFolder(`documents/${expenseId}`).catch(() => undefined);
+
+      await deleteItem('expenses', expenseId);
+    } catch (e) {
+      fail(e);
+    }
+  };
 
   const updateExpenseStatus = (expenseId: string, newStatus: ExpenseStatus, comment?: string) => {
     const expense = expenses.find((e) => e.id === expenseId);
