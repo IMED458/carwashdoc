@@ -25,6 +25,7 @@ interface DashboardProps {
   categories: Category[];
   tranches: Tranche[];
   notifications: Notification[];
+  totalBudget: number;
   onNavigate: (tab: string) => void;
 }
 
@@ -32,10 +33,11 @@ export default function Dashboard({
   expenses, 
   payments, 
   documents,
-  categories, 
-  tranches, 
+  categories,
+  tranches,
   notifications,
-  onNavigate 
+  totalBudget,
+  onNavigate
 }: DashboardProps) {
   
   // Formulas as requested:
@@ -45,7 +47,7 @@ export default function Dashboard({
     .filter(p => p.status === 'approved' && expenses.find(e => e.id === p.expenseId)?.status === ExpenseStatus.Approved)
     .reduce((sum, p) => sum + p.amount + (p.fee || 0), 0);
 
-  const confirmedRemaining = 50000 - confirmedPaidExpenses;
+  const confirmedRemaining = totalBudget - confirmedPaidExpenses;
 
   // 2. ფაქტობრივი დარჩენილი თანხა = 50,000 - ყველა გადახდილი ხარჯი
   // (Approved payments regardless of expense status)
@@ -53,7 +55,7 @@ export default function Dashboard({
     .filter(p => p.status === 'approved')
     .reduce((sum, p) => sum + p.amount + (p.fee || 0), 0);
 
-  const actualRemaining = 50000 - totalPaidAmount;
+  const actualRemaining = totalBudget - totalPaidAmount;
 
   // 3. პროგნოზული დარჩენილი თანხა = 50,000 - გადახდილი ხარჯები - დაგეგმილი/ხელშეკრულებით აღებული ხარჯები
   // Planned, ContractSigned, WorkInProgress, DocumentsMissing, PaymentPending, AccountantReview, NeedsCorrection etc. which are not yet fully paid
@@ -68,10 +70,12 @@ export default function Dashboard({
       return sum + remainingToPay;
     }, 0);
 
-  const forecastRemaining = 50000 - totalPaidAmount - totalPlannedOrCommitted;
+  const forecastRemaining = totalBudget - totalPaidAmount - totalPlannedOrCommitted;
 
   // Budget utilization percentage
-  const utilizationPercentage = Math.min(100, (totalPaidAmount / 50000) * 100);
+  const utilizationPercentage = totalBudget > 0
+    ? Math.min(100, (totalPaidAmount / totalBudget) * 100)
+    : 0;
 
   // Document status counts
   const isDocumentComplete = (expense: Expense) => {
@@ -137,7 +141,7 @@ export default function Dashboard({
         </div>
         <div className="relative z-10 flex flex-col items-end bg-white/10 backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-inner">
           <span className="text-xs text-slate-300 font-medium">სრული გრანტის ბიუჯეტი</span>
-          <span className="text-3xl font-black text-white mt-1">50,000.00 <span className="text-xl font-bold">GEL</span></span>
+          <span className="text-3xl font-black text-white mt-1">{totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-bold">GEL</span></span>
           <span className="text-[11px] text-slate-400 mt-1">100% სახელმწიფო თანადაფინანსება</span>
         </div>
       </div>
@@ -223,7 +227,7 @@ export default function Dashboard({
             />
             <div 
               className="bg-amber-400 h-full transition-all duration-500" 
-              style={{ width: `${Math.min(100 - utilizationPercentage, (totalPlannedOrCommitted / 50000) * 100)}%` }} 
+              style={{ width: `${totalBudget > 0 ? Math.min(100 - utilizationPercentage, (totalPlannedOrCommitted / totalBudget) * 100) : 0}%` }} 
             />
           </div>
           <div className="flex items-center gap-6 text-xs text-slate-500 pt-1">

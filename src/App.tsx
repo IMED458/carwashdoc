@@ -334,6 +334,7 @@ export default function App() {
           documents={documents}
           tranches={[]}
           notifications={notifications}
+          totalBudget={totalBudget}
           onNavigate={setActiveTab}
         />
       )}
