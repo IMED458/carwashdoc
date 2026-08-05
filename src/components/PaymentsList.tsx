@@ -5,20 +5,41 @@
 
 import React, { useState } from 'react';
 import { CreditCard, Search, ArrowRight, CheckCircle, Clock, Hash, ShieldAlert, Pencil, Trash2, X } from 'lucide-react';
-import { Payment, Expense, PaymentMethod } from '../types';
+import { Payment, Expense, Supplier, PaymentMethod } from '../types';
 import { PAYMENT_METHOD_LABELS } from '../data/defaults';
 
 interface PaymentsListProps {
   payments: Payment[];
   expenses: Expense[];
+  suppliers: Supplier[];
+  currentUserName: string;
   canEdit: boolean;
   onUpdate: (id: string, payment: Partial<Payment>) => void;
   onDelete: (id: string) => void;
 }
 
-export default function PaymentsList({ payments, expenses, canEdit, onUpdate, onDelete }: PaymentsListProps) {
+export default function PaymentsList({ payments, expenses, suppliers, currentUserName, canEdit, onUpdate, onDelete }: PaymentsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [editPayment, setEditPayment] = useState<Payment | null>(null);
+
+  // Resolve a payment's supplier tax id via its linked expense.
+  const supplierTaxId = (p: Payment): string => {
+    const expense = expenses.find((e) => e.id === p.expenseId);
+    if (!expense) return '';
+    const supplier = suppliers.find(
+      (s) => s.id === expense.supplierId || s.name === expense.supplier || s.name === expense.supplierId,
+    );
+    return supplier?.taxId || '';
+  };
+
+  const toggleDeclared = (p: Payment) => {
+    const next = !p.declared;
+    onUpdate(p.id, {
+      declared: next,
+      declaredBy: next ? currentUserName : '',
+      declaredAt: next ? new Date().toISOString().slice(0, 10) : '',
+    });
+  };
 
   // Filter payments
   const filteredPayments = payments.filter(p => {
@@ -84,6 +105,7 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
                 <th className="p-4 text-right">გადახდილი / ხარჯი</th>
                 <th className="p-4 text-center">მეთოდი</th>
                 <th className="p-4">თარიღი</th>
+                <th className="p-4 text-center">დეკლარირებული</th>
                 {canEdit && <th className="p-4 text-right">მოქმედება</th>}
               </tr>
             </thead>
@@ -94,6 +116,9 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4">
                       <span className="font-bold text-slate-900 block">{p.recipientName}</span>
+                      {supplierTaxId(p) && (
+                        <span className="text-[10px] text-slate-500 block font-mono">ს/კ: {supplierTaxId(p)}</span>
+                      )}
                       <span className="text-[10px] text-slate-400 block font-mono">ანგარიში: {p.payerAccount}</span>
                     </td>
                     <td className="p-4">
@@ -131,6 +156,21 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
                     <td className="p-4 font-mono text-slate-500">
                       {p.paymentDate}
                     </td>
+                    <td className="p-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={!!p.declared}
+                          disabled={!canEdit}
+                          onChange={() => toggleDeclared(p)}
+                          title={p.declared ? 'დადეკლარირებულია' : 'არ არის დეკლარირებული'}
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50 cursor-pointer"
+                        />
+                        {p.declared && p.declaredAt && (
+                          <span className="text-[9px] text-emerald-600 font-mono">{p.declaredAt}</span>
+                        )}
+                      </div>
+                    </td>
                     {canEdit && (
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-1">
@@ -158,7 +198,7 @@ export default function PaymentsList({ payments, expenses, canEdit, onUpdate, on
               })}
               {filteredPayments.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} className="text-center py-10 text-slate-400 font-medium">გადახდის ჩანაწერები ვერ მოიძებნა.</td>
+                  <td colSpan={canEdit ? 8 : 7} className="text-center py-10 text-slate-400 font-medium">გადახდის ჩანაწერები ვერ მოიძებნა.</td>
                 </tr>
               )}
             </tbody>

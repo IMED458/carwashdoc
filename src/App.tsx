@@ -380,6 +380,8 @@ export default function App() {
         <PaymentsList
           payments={payments}
           expenses={expenses}
+          suppliers={suppliers}
+          currentUserName={currentUser.name}
           canEdit={editable}
           onUpdate={updatePayment}
           onDelete={deletePayment}

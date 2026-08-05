@@ -146,6 +146,10 @@ export interface Payment {
   comment?: string;
   checkedBy?: string;
   status: 'pending' | 'approved' | 'rejected';
+  // Accountant declaration mark (RS/tax portal): whether this payment is declared.
+  declared?: boolean;
+  declaredBy?: string;
+  declaredAt?: string;
   createdAt: string;
 }
 
