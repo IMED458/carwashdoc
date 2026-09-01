@@ -100,6 +100,9 @@ export default function ExpensesList({
   const [selectedSupplier, setSelectedSupplier] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedDocCompleteness, setSelectedDocCompleteness] = useState('all');
+  const [monthFilter, setMonthFilter] = useState(''); // YYYY-MM
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   
   // Modals States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -216,8 +219,18 @@ export default function ExpensesList({
       docFilter = selectedDocCompleteness === completeness.status;
     }
 
-    return (titleMatch || supplierMatch || descriptionMatch || invoiceMatch) && 
-           categoryFilter && supplierFilter && statusFilter && docFilter;
+    // Date filter (by document/invoice date): month OR explicit range.
+    const d = exp.invoiceDate || '';
+    let dateFilter = true;
+    if (monthFilter || fromDate || toDate) {
+      if (!d) dateFilter = false;
+      else if (monthFilter && !d.startsWith(monthFilter)) dateFilter = false;
+      else if (fromDate && d < fromDate) dateFilter = false;
+      else if (toDate && d > toDate) dateFilter = false;
+    }
+
+    return (titleMatch || supplierMatch || descriptionMatch || invoiceMatch) &&
+           categoryFilter && supplierFilter && statusFilter && docFilter && dateFilter;
   });
 
   const resetExpenseForm = () => {
@@ -546,6 +559,47 @@ export default function ExpensesList({
             </select>
           </div>
 
+        </div>
+
+        {/* Date filter — month + detailed range (by document/invoice date) */}
+        <div className="flex flex-wrap items-end gap-3 pt-1">
+          <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+            თვე
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => { setMonthFilter(e.target.value); setFromDate(''); setToDate(''); }}
+              className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+            />
+          </label>
+          <span className="text-[11px] text-slate-300 pb-2">ან</span>
+          <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+            თარიღიდან
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => { setFromDate(e.target.value); setMonthFilter(''); }}
+              className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+            />
+          </label>
+          <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+            თარიღამდე
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => { setToDate(e.target.value); setMonthFilter(''); }}
+              className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+            />
+          </label>
+          {(monthFilter || fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={() => { setMonthFilter(''); setFromDate(''); setToDate(''); }}
+              className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl border border-slate-200"
+            >
+              გასუფთავება
+            </button>
+          )}
         </div>
 
         {/* Extra document completeness status filter */}

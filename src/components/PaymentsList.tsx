@@ -20,7 +20,28 @@ interface PaymentsListProps {
 
 export default function PaymentsList({ payments, expenses, suppliers, currentUserName, canEdit, onUpdate, onDelete }: PaymentsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [monthFilter, setMonthFilter] = useState(''); // YYYY-MM
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [editPayment, setEditPayment] = useState<Payment | null>(null);
+
+  const hasDateFilter = !!(monthFilter || fromDate || toDate);
+
+  const clearDateFilters = () => {
+    setMonthFilter('');
+    setFromDate('');
+    setToDate('');
+  };
+
+  // A payment's date passes the active date filter (month + explicit range).
+  const inDateRange = (d: string): boolean => {
+    if (!hasDateFilter) return true;
+    if (!d) return false;
+    if (monthFilter && !d.startsWith(monthFilter)) return false;
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  };
 
   // Resolve a payment's supplier tax id via its linked expense.
   const supplierTaxId = (p: Payment): string => {
@@ -41,14 +62,25 @@ export default function PaymentsList({ payments, expenses, suppliers, currentUse
     });
   };
 
-  // Filter payments
+  // Filter payments by search text AND date filter.
   const filteredPayments = payments.filter(p => {
     const matchedExpense = expenses.find(e => e.id === p.expenseId);
-    return p.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.bankTxNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           matchedExpense?.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const textMatch =
+      !term ||
+      p.recipientName.toLowerCase().includes(term) ||
+      p.purpose.toLowerCase().includes(term) ||
+      (p.bankTxNumber?.toLowerCase().includes(term) ?? false) ||
+      (matchedExpense?.title.toLowerCase().includes(term) ?? false);
+    return textMatch && inDateRange(p.paymentDate);
   });
+
+  // Totals over the currently visible (filtered) payments — what the accountant
+  // needs when preparing a given month's declaration.
+  const filteredApproved = filteredPayments.filter(p => p.status === 'approved');
+  const filteredSpent = filteredApproved.reduce((s, p) => s + p.amount + (p.fee || 0), 0);
+  const filteredFees = filteredPayments.reduce((s, p) => s + (p.fee || 0), 0);
+  const filteredDeclaredCount = filteredPayments.filter(p => p.declared).length;
 
   return (
     <div className="space-y-6" id="payments-section-root">
@@ -61,22 +93,28 @@ export default function PaymentsList({ payments, expenses, suppliers, currentUse
         </p>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats row — reflects the current filter (all when no filter is set) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">სულ გადახდები</span>
-          <span className="text-xl font-black text-slate-800 block mt-1">{payments.length} ტრანზაქცია</span>
+          <span className="text-slate-400 block font-medium">გადახდები {hasDateFilter ? '(ფილტრით)' : ''}</span>
+          <span className="text-xl font-black text-slate-800 block mt-1">{filteredPayments.length} ტრანზაქცია</span>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">ჯამურად დახარჯული თანხა</span>
+          <span className="text-slate-400 block font-medium">ჯამურად დახარჯული</span>
           <span className="text-xl font-black text-indigo-600 block mt-1">
-            {payments.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount + (p.fee || 0), 0).toLocaleString()} GEL
+            {filteredSpent.toLocaleString()} GEL
           </span>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
-          <span className="text-slate-400 block font-medium">სულ საბანკო საკომისიო</span>
+          <span className="text-slate-400 block font-medium">საბანკო საკომისიო</span>
           <span className="text-xl font-black text-slate-800 block mt-1">
-            {payments.reduce((s, p) => s + p.fee, 0).toLocaleString()} GEL
+            {filteredFees.toLocaleString()} GEL
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs">
+          <span className="text-slate-400 block font-medium">დეკლარირებული</span>
+          <span className="text-xl font-black text-emerald-600 block mt-1">
+            {filteredDeclaredCount} / {filteredPayments.length}
           </span>
         </div>
       </div>
@@ -91,6 +129,47 @@ export default function PaymentsList({ payments, expenses, suppliers, currentUse
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-2 bg-slate-50/50 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
         />
+      </div>
+
+      {/* Date filters — month + detailed range (for preparing monthly declarations) */}
+      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-wrap items-end gap-3">
+        <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+          თვე
+          <input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => { setMonthFilter(e.target.value); setFromDate(''); setToDate(''); }}
+            className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+          />
+        </label>
+        <span className="text-[11px] text-slate-300 pb-2">ან</span>
+        <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+          თარიღიდან
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setMonthFilter(''); }}
+            className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+          />
+        </label>
+        <label className="text-[11px] font-bold text-slate-500 flex flex-col gap-1">
+          თარიღამდე
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => { setToDate(e.target.value); setMonthFilter(''); }}
+            className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700"
+          />
+        </label>
+        {hasDateFilter && (
+          <button
+            type="button"
+            onClick={clearDateFilters}
+            className="ml-auto px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl border border-slate-200"
+          >
+            გასუფთავება
+          </button>
+        )}
       </div>
 
       {/* Table */}
