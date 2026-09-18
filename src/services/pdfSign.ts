@@ -85,27 +85,44 @@ export interface StampField {
   height?: number;
 }
 
-/** ხელმოწერის PNG-ის ჩასმა PDF-ში და ხელმოწერილი bytes-ის დაბრუნება. */
+/**
+ * ხელმოწერის PNG-ის ჩასმა PDF-ში ზუსტად შემქმნელის მიერ მითითებულ ადგილას და
+ * ზომაზე. ხელმომწერი ვერაფერს ცვლის — მხოლოდ სურათი ისმება მოცემულ ველში.
+ * ხელმოწერა პროპორციულად თავსდება ველში (დამახინჯების გარეშე), ცენტრში.
+ * @param signaturePngDataUrl სუფთა ხელმოწერის სურათი (გამჭვირვალე ფონით).
+ */
 export async function signPdf(
   originalBytes: Uint8Array,
-  stampPngDataUrl: string,
+  signaturePngDataUrl: string,
   field?: StampField,
 ): Promise<Uint8Array> {
   const start = findPdfStart(originalBytes);
   const clean = start > 0 ? originalBytes.subarray(start) : originalBytes;
   const pdf = await PDFDocument.load(clean, { ignoreEncryption: true });
-  const png = await pdf.embedPng(dataUrlToBytes(stampPngDataUrl));
+  const png = await pdf.embedPng(dataUrlToBytes(signaturePngDataUrl));
   const pages = pdf.getPages();
   const idx = field?.page ? Math.min(Math.max(0, field.page - 1), pages.length - 1) : pages.length - 1;
   const page = pages[idx];
-  const { height: ph } = page.getSize();
+  const { width: pw, height: ph } = page.getSize();
 
-  const w = Math.max(field?.width || 260, 240);
-  const h = Math.max(field?.height || 118, 108);
-  const x = field?.x ?? 40;
-  // field.y მოდის viewer-ის top-left სისტემიდან; PDF bottom-left-ია
-  const y = field?.y != null ? Math.max(10, ph - field.y - h) : 40;
+  // ველი ზუსტად ისე, როგორც შემქმნელმა განათავსა (PDF წერტილები, top-left საწყისი).
+  // მინიმუმებს აღარ ვაწესებთ — ზომა ზუსტად მითითებულია.
+  const boxW = field?.width && field.width > 0 ? field.width : 200;
+  const boxH = field?.height && field.height > 0 ? field.height : 110;
+  const boxX = field?.x ?? 40;
+  const boxYTop = field?.y != null ? field.y : ph - boxH - 40;
 
-  page.drawImage(png, { x, y, width: w, height: h });
+  // ხელმოწერა ვათავსებთ ველში პროპორციის დაცვით (contain), ცენტრში.
+  const fit = Math.min(boxW / png.width, boxH / png.height);
+  const drawW = png.width * fit;
+  const drawH = png.height * fit;
+  const drawXTopLeft = boxX + (boxW - drawW) / 2;
+  const drawYTop = boxYTop + (boxH - drawH) / 2;
+
+  // top-left (viewer) → bottom-left (PDF).
+  const x = Math.max(0, Math.min(pw - drawW, drawXTopLeft));
+  const y = Math.max(0, Math.min(ph - drawH, ph - drawYTop - drawH));
+
+  page.drawImage(png, { x, y, width: drawW, height: drawH });
   return pdf.save();
 }

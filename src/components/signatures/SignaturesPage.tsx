@@ -314,6 +314,36 @@ function RequestModal({
               <PdfViewer source={fileBytes || editing!.originalUrl} placeable field={field} onField={setField} maxWidth={460} />
             </div>
           )}
+
+          {/* ხელმოწერის ველის ზუსტი ზომა/პოზიცია (PDF წერტილებში) — ხელმომწერი ამას ვერ ცვლის */}
+          {field && (
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
+              <p className="text-[11px] font-bold text-indigo-700 mb-2">ხელმოწერის ველის ზუსტი ზომა და პოზიცია</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { key: 'width', label: 'სიგანე', min: 20 },
+                  { key: 'height', label: 'სიმაღლე', min: 12 },
+                  { key: 'x', label: 'X (მარცხ.)', min: 0 },
+                  { key: 'y', label: 'Y (ზემოდან)', min: 0 },
+                ] as const).map((f) => (
+                  <label key={f.key} className="text-[10px] font-bold text-slate-500 flex flex-col gap-1">
+                    {f.label}
+                    <input
+                      type="number"
+                      value={Math.round(field[f.key])}
+                      min={f.min}
+                      onChange={(e) => {
+                        const v = Math.max(f.min, Number(e.target.value) || 0);
+                        setField({ ...field, [f.key]: v });
+                      }}
+                      className="px-2 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-700 font-mono"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1.5">გვერდზეც შეგიძლიათ გადათრევა/კუთხით ზომის შეცვლა. ხელმომწერი ვერაფერს ცვლის.</p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">დასახელება</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="(ავტომატურად ფაილის სახელი)" className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-sm" />

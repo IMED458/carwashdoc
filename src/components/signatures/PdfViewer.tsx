@@ -222,6 +222,7 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
               style={{ width: m.cssW, height: m.cssH, cursor: placeable ? 'crosshair' : 'default' }}
             >
               <canvas ref={(el) => (canvasRefs.current[i] = el)} className="block" />
+              {/* შემქმნელი (placeable): გადათრევა + ზომის ცვლილება. */}
               {placeable && field && field.page === m.num && (
                 <div
                   onPointerDown={onBoxDown}
@@ -241,6 +242,15 @@ export default function PdfViewer({ source, placeable = false, field = null, onF
                     onPointerCancel={onBoxUp}
                     className="absolute -right-2 -bottom-2 h-5 w-5 rounded-full bg-emerald-600 border-2 border-white shadow cursor-nwse-resize"
                   />
+                </div>
+              )}
+              {/* ხელმომწერი (read-only): მხოლოდ ხედავს ველს, ვერ ცვლის ადგილს/ზომას. */}
+              {!placeable && field && field.page === m.num && (
+                <div
+                  className="absolute border-2 border-dashed border-emerald-500 bg-emerald-400/10 flex items-center justify-center pointer-events-none"
+                  style={{ left: field.x * m.scale, top: field.y * m.scale, width: field.width * m.scale, height: field.height * m.scale }}
+                >
+                  <span className="text-[10px] font-bold text-emerald-700">ხელმოწერის ადგილი</span>
                 </div>
               )}
               <span className="absolute bottom-1 right-2 text-[10px] text-slate-400">{m.num}</span>

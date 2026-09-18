@@ -9,7 +9,7 @@ import {
   SignatureType,
   isExpired,
 } from '../../services/signatures';
-import { fetchBytes, composeStamp, signPdf, sha256Hex } from '../../services/pdfSign';
+import { fetchBytes, signPdf, sha256Hex } from '../../services/pdfSign';
 import { uploadBytesTo } from '../../services/storage';
 import SignatureModal from './SignatureModal';
 import PdfViewer, { PlacedField } from './PdfViewer';
@@ -66,12 +66,9 @@ export default function SignPage({ token }: { token: string }) {
       } catch {
         original = await fetchBytes(data.request.originalUrl);
       }
-      const stamp = await composeStamp(sigDataUrl, {
-        name: data.recipient.name,
-        email: data.recipient.email,
-        date: new Date().toLocaleString('ka-GE'),
-      });
-      const signedBytes = await signPdf(original, stamp, field || undefined);
+      // ხელმოწერა ისმება ზუსტად შემქმნელის მიერ მითითებულ ველში — ხელმომწერი
+      // ვერც ადგილს და ვერც ზომას ცვლის (field კეთდება ლოკნულად UI-შიც).
+      const signedBytes = await signPdf(original, sigDataUrl, field || undefined);
       const path = `documents/sign/${data.request.id}/signed_${Date.now()}.pdf`;
       const url = await uploadBytesTo(path, signedBytes);
       const hash = await sha256Hex(signedBytes);
@@ -123,11 +120,12 @@ export default function SignPage({ token }: { token: string }) {
 
       <div className="flex-1 p-3 md:p-6 max-w-4xl w-full mx-auto space-y-4">
         <div className="bg-white rounded-xl border border-slate-200 overflow-y-auto max-h-[65vh]">
+          {/* ხელმომწერისთვის ველი ჩაკეტილია — ხედავს სად დაჯდება ხელმოწერა, მაგრამ
+              ვერც ადგილს და ვერც ზომას ცვლის. */}
           <PdfViewer
             source={signedUrl || data.request.originalUrl}
-            placeable={!done}
+            placeable={false}
             field={field}
-            onField={setField}
           />
         </div>
 
